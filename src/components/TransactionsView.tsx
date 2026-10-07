@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import type { Ledger, Transaction } from '../types'
 import { formatMoney, formatDateTaiwan, formatFullDate } from '../utils/format'
 import {
@@ -35,28 +35,69 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [selectedMonth, setSelectedMonth] = useState<string>('')
-
-  // 月曆專用狀態：目前瀏覽的年與月 (YYYY-MM)，以及點選的特定日期 (YYYY-MM-DD)
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
-  const [calendarMonth, setCalendarMonth] = useState<string>(() => todayStr.substring(0, 7))
-  const [selectedDate, setSelectedDate] = useState<string>(todayStr)
+  // 目前年月份字串 (YYYY-MM)
+  const currentMonthStr = useMemo(() => new Date().toISOString().substring(0, 7), [])
 
   // 取得此帳本內所有記錄
   const ledgerTxList = useMemo(() => {
     return transactions.filter((t) => t.ledgerId === activeLedger.id)
   }, [transactions, activeLedger.id])
 
-  // 取得所有存在的月份清單
+  // 取得所有存在的月份清單 (保證包含當前月份)
   const availableMonths = useMemo(() => {
     const set = new Set<string>()
+    set.add(currentMonthStr)
     ledgerTxList.forEach((t) => {
       if (t.date && t.date.length >= 7) {
         set.add(t.date.substring(0, 7))
       }
     })
     return Array.from(set).sort().reverse()
-  }, [ledgerTxList])
+  }, [ledgerTxList, currentMonthStr])
+
+  // 明細列表預設依當前月份 (YYYY-MM) 進行過濾
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    return new Date().toISOString().substring(0, 7)
+  })
+
+  // 快速切換上一月 / 下一月
+  const handlePrevMonth = () => {
+    const baseMonth = selectedMonth || currentMonthStr
+    const [year, month] = baseMonth.split('-').map(Number)
+    const prevDate = new Date(year, month - 2, 1)
+    const prevStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
+    setSelectedMonth(prevStr)
+  }
+
+  const handleNextMonth = () => {
+    const baseMonth = selectedMonth || currentMonthStr
+    const [year, month] = baseMonth.split('-').map(Number)
+    const nextDate = new Date(year, month, 1)
+    const nextStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`
+    setSelectedMonth(nextStr)
+  }
+
+  // 切換帳本時，智慧調整預設選中月份
+  useEffect(() => {
+    // 檢查此帳本是否有當前選中的月份
+    const hasCurrentSelected = ledgerTxList.some(
+      (t) => t.date && t.date.startsWith(selectedMonth)
+    )
+    if (!hasCurrentSelected && ledgerTxList.length > 0) {
+      // 若當前所選月份在該帳本無資料，但該帳本有其他記錄，自動對齊至最新有記錄的月份
+      const latestMonth = availableMonths.find(
+        (m) => m !== currentMonthStr && ledgerTxList.some((t) => t.date.startsWith(m))
+      )
+      if (latestMonth) {
+        setSelectedMonth(latestMonth)
+      }
+    }
+  }, [activeLedger.id])
+
+  // 月曆專用狀態：目前瀏覽的年與月 (YYYY-MM)，以及點選的特定日期 (YYYY-MM-DD)
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const [calendarMonth, setCalendarMonth] = useState<string>(() => todayStr.substring(0, 7))
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr)
 
   // --- 列表模式：篩選後資料 ---
   const filteredTransactions = useMemo(() => {
@@ -180,15 +221,27 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     return days
   }, [calendarMonth])
 
-  // 月曆中每一天的財務匯總 Map
+  // 月曆中每一天的財務匯總 Map (包含當日總損益金額)
   const dailySummaryMap = useMemo(() => {
     const map = new Map<
       string,
-      { income: number; expense: number; stockBuy: number; count: number }
+      {
+        income: number
+        expense: number
+        stockBuy: number
+        net: number
+        count: number
+      }
     >()
 
     ledgerTxList.forEach((t) => {
-      const existing = map.get(t.date) || { income: 0, expense: 0, stockBuy: 0, count: 0 }
+      const existing = map.get(t.date) || {
+        income: 0,
+        expense: 0,
+        stockBuy: 0,
+        net: 0,
+        count: 0,
+      }
       existing.count += 1
       if (t.type === 'income' || t.type === 'stock_sell' || t.type === 'dividend') {
         existing.income += t.amount
@@ -197,11 +250,28 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       } else {
         existing.expense += t.amount
       }
+      existing.net = existing.income - (existing.expense + existing.stockBuy)
       map.set(t.date, existing)
     })
 
     return map
   }, [ledgerTxList])
+
+  // 月曆當月總損益金額
+  const calendarMonthNet = useMemo(() => {
+    let income = 0
+    let outlay = 0
+    ledgerTxList.forEach((t) => {
+      if (t.date && t.date.startsWith(calendarMonth)) {
+        if (t.type === 'income' || t.type === 'stock_sell' || t.type === 'dividend') {
+          income += t.amount
+        } else {
+          outlay += t.amount
+        }
+      }
+    })
+    return income - outlay
+  }, [ledgerTxList, calendarMonth])
 
   // 當前選取日期的所有明細記錄
   const selectedDateTransactions = useMemo(() => {
@@ -323,8 +393,23 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               </button>
             </div>
 
-            <div className="font-bold text-base text-white tracking-wide">
-              {calendarMonth.replace('-', ' 年 ')} 月
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-base text-white tracking-wide">
+                {calendarMonth.replace('-', ' 年 ')} 月
+              </span>
+              <span
+                className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
+                  calendarMonthNet > 0
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    : calendarMonthNet < 0
+                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+                title="當月累積總損益"
+              >
+                總損益: {calendarMonthNet > 0 ? '+' : ''}
+                {maskValue(formatMoney(calendarMonthNet, activeLedger.currency))}
+              </span>
             </div>
 
             <span className="text-xs text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg">
@@ -390,24 +475,29 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                       )}
                     </div>
 
-                    {/* 當日財務數據標籤 */}
-                    <div className="w-full flex flex-col items-center justify-end gap-0.5 mt-1 overflow-hidden">
-                      {summary && summary.income > 0 && (
-                        <span className="text-[9px] text-emerald-400 font-medium truncate leading-tight">
-                          +{formatCompactAmount(summary.income)}
+                    {/* 當日總損益金額 */}
+                    {summary && summary.count > 0 ? (
+                      <div className="w-full flex flex-col items-center justify-end gap-0.5 mt-auto pt-1 overflow-hidden">
+                        <div
+                          className={`w-full text-center text-[10px] sm:text-xs font-bold font-mono px-1 py-0.5 rounded-md truncate leading-tight ${
+                            summary.net > 0
+                              ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/25'
+                              : summary.net < 0
+                              ? 'text-rose-400 bg-rose-500/15 border border-rose-500/25'
+                              : 'text-slate-400 bg-slate-800/60'
+                          }`}
+                          title={`總損益金額: ${summary.net >= 0 ? '+' : ''}${maskValue(formatMoney(summary.net, activeLedger.currency))} (${summary.count} 筆記錄)`}
+                        >
+                          {summary.net > 0 ? '+' : summary.net < 0 ? '-' : ''}
+                          {formatCompactAmount(Math.abs(summary.net))}
+                        </div>
+                        <span className="text-[9px] text-slate-500 scale-90 -mt-0.5">
+                          {summary.count}筆
                         </span>
-                      )}
-                      {summary && summary.expense > 0 && (
-                        <span className="text-[9px] text-rose-400 font-medium truncate leading-tight">
-                          -{formatCompactAmount(summary.expense)}
-                        </span>
-                      )}
-                      {summary && summary.stockBuy > 0 && (
-                        <span className="text-[9px] text-blue-400 font-medium truncate leading-tight">
-                          買{formatCompactAmount(summary.stockBuy)}
-                        </span>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="mt-auto h-4" />
+                    )}
                   </button>
                 )
               })}
@@ -612,21 +702,39 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                 股票/投資
               </button>
 
-              {/* 月份選擇下拉 */}
-              {availableMonths.length > 0 && (
+              {/* 月份選擇與切換 */}
+              <div className="flex items-center gap-0.5 shrink-0 bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="上個月"
+                >
+                  <ChevronLeft size={14} />
+                </button>
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="bg-slate-900 text-slate-300 border border-slate-800 rounded-lg px-2.5 py-1.5 shrink-0 focus:outline-none focus:border-emerald-500 text-xs"
+                  className="bg-transparent text-slate-200 border-none px-1.5 py-1 focus:outline-none text-xs cursor-pointer font-medium"
                 >
-                  <option value="">所有月份</option>
+                  <option value="" className="bg-slate-900 text-slate-300">
+                    所有月份
+                  </option>
                   {availableMonths.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+                    <option key={m} value={m} className="bg-slate-900 text-slate-200">
+                      {m === currentMonthStr ? `${m} (本月)` : m}
                     </option>
                   ))}
                 </select>
-              )}
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="下個月"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -634,11 +742,12 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center justify-between">
             <div>
               <div className="text-xs text-slate-400 font-medium mb-1">
+                {selectedMonth ? `${selectedMonth} ` : '全部'}
                 {activeLedger.type === 'futures'
-                  ? '明細累計淨損益 (總金額)'
+                  ? '淨損益 (總金額)'
                   : activeLedger.type === 'stock'
-                  ? '明細累計淨額 (總金額)'
-                  : '明細收支總金額 (結餘)'}
+                  ? '淨額 (總金額)'
+                  : '收支總金額 (結餘)'}
               </div>
               <div className="text-2xl font-extrabold tracking-tight flex items-baseline gap-1">
                 <span
@@ -671,9 +780,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
           {/* 明細分組清單 */}
           {Object.keys(groupedByDate).length === 0 ? (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center">
-              <Inbox size={36} className="mx-auto text-slate-600 mb-3" />
-              <p className="text-sm text-slate-400">查無符合條件的記錄</p>
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-10 text-center space-y-2.5">
+              <Inbox size={36} className="mx-auto text-slate-600 mb-2" />
+              <p className="text-sm text-slate-400">
+                {selectedMonth ? `查無 ${selectedMonth} 的記帳記錄` : '查無符合條件的記錄'}
+              </p>
+              {selectedMonth && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth('')}
+                  className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-xl transition-colors cursor-pointer border border-slate-700 font-medium"
+                >
+                  查看所有月份記錄
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
