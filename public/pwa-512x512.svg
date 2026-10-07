@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#090d16" />
+    </linearGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#10b981" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="510" height="510" x="1" y="1" rx="111" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2" />
+
+  <!-- Outer subtle ring -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="rgba(52, 211, 153, 0.15)" stroke-width="6" stroke-dasharray="8 8" />
+
+  <!-- Main Glow Container -->
+  <g filter="url(#glow)">
+    <!-- Wallet / Vault Base Shape -->
+    <rect x="140" y="180" width="232" height="170" rx="36" fill="url(#emeraldGrad)" />
+    
+    <!-- Flap / Top accent -->
+    <path d="M140 220 L256 280 L372 220 L372 196 C372 182 360 170 346 170 L166 170 C152 170 140 182 140 196 Z" fill="#047857" opacity="0.35" />
+    
+    <!-- Golden Coin -->
+    <circle cx="330" cy="225" r="44" fill="url(#goldGrad)" stroke="#fef3c7" stroke-width="4" />
+    <!-- Stock Growth Arrow inside Coin / Ledger -->
+    <path d="M316 235 L332 215 L344 223 L352 211" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M344 211 L352 211 L352 219" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Ledger Lines on Wallet -->
+    <rect x="180" y="270" width="80" height="10" rx="5" fill="#ffffff" opacity="0.8" />
+    <rect x="180" y="295" width="115" height="10" rx="5" fill="#ffffff" opacity="0.6" />
+    <circle cx="330" cy="285" r="14" fill="#ffffff" opacity="0.9" />
+  </g>
+</svg>
+
