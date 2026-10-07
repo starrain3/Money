@@ -199,7 +199,7 @@ export const exportAllLedgersToCSV = (ledgers: Ledger[], transactions: Transacti
   const a = document.createElement('a')
   const dateStr = new Date().toISOString().split('T')[0]
   a.href = url
-  a.download = `豐收記帳_全部明細備份_${dateStr}.csv`
+  a.download = `Ku_Money_全部明細備份_${dateStr}.csv`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

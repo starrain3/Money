@@ -60,9 +60,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: '豐收記帳 - 多帳本與投資管理',
-        short_name: '豐收記帳',
-        description: '支援生活收支與股票投資的多帳本離線 PWA 記帳工具',
+        name: 'Ku Money - 多帳本與投資管理',
+        short_name: 'Ku Money',
+        description: 'Ku Money - 支援生活收支與股票投資的多帳本離線 PWA 記帳工具',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',

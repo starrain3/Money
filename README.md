@@ -1,5 +1,5 @@
-# 豐收記帳 (HarvestBook PWA) 🌾💰
-
+# Ku Money 💰
+ 
 > 一款支援多帳本切換（日常生活、股票投資專戶）、資料 100% 本地隱私保存、具備離線快取與安裝能力的現代化 Progressive Web App (PWA) 記帳應用程式。
 
 ---
