@@ -745,9 +745,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
         </div>
 
-        {/* 捲動表單內容 */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto px-5 py-4 space-y-4 flex-1">
-          {/* 收支類型標籤切換 */}
+        {/* 表單主體：包含可捲動細項填寫區與固定常駐底部按鈕列 */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* 捲動表單細項內容區 */}
+          <div className="overflow-y-auto px-5 py-4 space-y-4 flex-1">
+            {/* 收支類型標籤切換 */}
           <div>
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-800/80 rounded-xl">
               {isStockLedger ? (
@@ -1718,8 +1720,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             )}
           </div>
 
-          {/* 底部按鈕區 */}
-          <div className="pt-2 flex items-center gap-2">
+          </div>
+
+          {/* 固定底部按鈕區 (常駐可見，不隨表單細項捲動) */}
+          <div className="px-5 py-3.5 border-t border-slate-800/80 bg-slate-900/95 backdrop-blur-sm shrink-0 flex items-center gap-2 shadow-lg">
             {editTransaction && onDelete && (
               <button
                 type="button"
@@ -1738,7 +1742,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
             <button
               type="submit"
-              className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-semibold text-sm rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer text-center"
+              className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-semibold text-sm rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer text-center active:scale-[0.99]"
             >
               {editTransaction ? '儲存變更' : '確認記帳'}
             </button>
