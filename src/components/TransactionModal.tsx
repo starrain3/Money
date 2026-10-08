@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import type { Ledger, Transaction, TransactionType, CategoryItem } from '../types'
+import { loadRecentInputs, recordRecentInput } from '../utils/storage'
 import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  STOCK_CATEGORIES,
-  STOCK_EXPENSE_CATEGORIES,
-  STOCK_INCOME_CATEGORIES,
-  FUTURES_TRADE_CATEGORIES,
-  FUTURES_EXPENSE_CATEGORIES,
-  FUTURES_INCOME_CATEGORIES,
-  DEFAULT_ACCOUNTS,
-} from '../constants/categories'
-import { loadCustomCategories, addCustomCategory, loadRecentInputs, recordRecentInput } from '../utils/storage'
+  resolveCategoryGroupKey,
+  loadCategories,
+  saveCategories,
+} from '../utils/categoryStorage'
+import {
+  loadLedgerAccounts,
+  loadLedgerLastAccount,
+  saveLedgerAccounts,
+  recordLedgerAccountUsage,
+  resetLedgerAccounts,
+} from '../utils/accountStorage'
 import { calculateFee, formatFeeConfigSummary } from '../utils/fee'
 import { DynamicIcon } from './DynamicIcon'
-import { X, Calendar, Clock, Calculator, Trash2, Plus, Check, History, RotateCcw, Package, RefreshCw } from 'lucide-react'
+import { CategoryManagerModal } from './CategoryManagerModal'
+import { X, Calendar, Clock, Calculator, Trash2, Plus, Check, History, RotateCcw, Package, RefreshCw, SlidersHorizontal, Wallet } from 'lucide-react'
 
 const AVAILABLE_ICONS = [
   'Tag', 'Coffee', 'Dog', 'Cat', 'Baby', 'Gamepad2', 'Film', 'Music', 
@@ -61,10 +63,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [time, setTime] = useState<string>(
     new Date().toTimeString().split(' ')[0].substring(0, 5)
   )
-  const [account, setAccount] = useState<string>(
-    isFuturesLedger ? '期貨保證金專戶' : isStockLedger ? '證券交割戶' : DEFAULT_ACCOUNTS[1]
+  const [account, setAccount] = useState<string>(() =>
+    loadLedgerLastAccount(activeLedger.id, activeLedger.type)
   )
   const [notes, setNotes] = useState<string>('')
+
+  // 帳本專屬常用錢包狀態 (各自獨立儲存於 localStorage)
+  const [ledgerAccounts, setLedgerAccounts] = useState<string[]>(() =>
+    loadLedgerAccounts(activeLedger.id, activeLedger.type)
+  )
+  const [isAddingCustomAccount, setIsAddingCustomAccount] = useState<boolean>(false)
+  const [newAccountInput, setNewAccountInput] = useState<string>('')
 
   // 股票專用欄位
   const [stockSymbol, setStockSymbol] = useState<string>('')
@@ -75,7 +84,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [futuresMultiplier, setFuturesMultiplier] = useState<number>(1)
 
   // 自訂分類狀態
-  const [customCategories, setCustomCategories] = useState<CategoryItem[]>(() => loadCustomCategories())
+  const [isCatManagerOpen, setIsCatManagerOpen] = useState<boolean>(false)
+  const [categoryRefreshKey, setCategoryRefreshKey] = useState<number>(0)
   const [isAddingCategory, setIsAddingCategory] = useState<boolean>(false)
   const [newCatName, setNewCatName] = useState<string>('')
   const [newCatIcon, setNewCatIcon] = useState<string>('Tag')
@@ -85,9 +95,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [isFeeUserModified, setIsFeeUserModified] = useState<boolean>(false)
   const [isTaxUserModified, setIsTaxUserModified] = useState<boolean>(false)
 
-  // 智慧記憶：整合所有歷史輸入紀錄 (備註、股票標的/期貨商品、常用金額、上一筆交易)
+  // 智慧記憶：整合所有歷史輸入紀錄 (依帳本分開載入：備註、股票標的/期貨商品、常用金額、上一筆交易)
   const recentHistory = useMemo(() => {
-    const stored = loadRecentInputs()
+    const stored = loadRecentInputs(activeLedger.id)
     const ledgerTx = existingTransactions.filter((t) => t.ledgerId === activeLedger.id)
 
     const sortedTx = [...ledgerTx].sort((a, b) =>
@@ -130,9 +140,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   // 當開啟或編輯時同步資料
   useEffect(() => {
     if (isOpen) {
-      setCustomCategories(loadCustomCategories())
       setIsAddingCategory(false)
       setNewCatName('')
+      setIsAddingCustomAccount(false)
+      setNewAccountInput('')
+      setLedgerAccounts(loadLedgerAccounts(activeLedger.id, activeLedger.type))
     }
 
     if (editTransaction) {
@@ -141,7 +153,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setCategory(editTransaction.category)
       setDate(editTransaction.date)
       setTime(editTransaction.time || '12:00')
-      setAccount(editTransaction.account || DEFAULT_ACCOUNTS[0])
+      setAccount(editTransaction.account || loadLedgerLastAccount(activeLedger.id, activeLedger.type))
       setNotes(editTransaction.notes || '')
       setStockSymbol(editTransaction.stockSymbol || '')
       setShares(editTransaction.shares ? editTransaction.shares.toString() : '')
@@ -162,14 +174,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setDate(defaultDate || new Date().toISOString().split('T')[0])
       setTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
 
-      // 自動記住使用者上次使用之帳戶 (若有的話)
-      const storedInputs = loadRecentInputs()
-      const fallbackAccount = isFuturesLedger
-        ? '期貨保證金專戶'
-        : isStockLedger
-        ? '證券交割戶'
-        : DEFAULT_ACCOUNTS[1]
-      setAccount(storedInputs.lastAccount || fallbackAccount)
+      // 自動記住此帳本在 localStorage 分開記錄的上次使用錢包
+      const ledgerLastAcc = loadLedgerLastAccount(activeLedger.id, activeLedger.type)
+      setAccount(ledgerLastAcc)
 
       setNotes('')
       setStockSymbol('')
@@ -186,15 +193,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setTax('0')
       setIsFeeUserModified(false)
       setIsTaxUserModified(false)
-      setCategory(
-        isFuturesLedger
-          ? FUTURES_TRADE_CATEGORIES[0].name
-          : isStockLedger
-          ? '股票買進'
-          : EXPENSE_CATEGORIES[0].name
-      )
+      const initialGroup = resolveCategoryGroupKey(activeLedger.type, defaultType)
+      const initialOptions = loadCategories(initialGroup)
+      setCategory(initialOptions[0]?.name || '')
     }
-  }, [editTransaction, isOpen, isStockLedger, isFuturesLedger, defaultDate, activeLedger.feeConfig])
+  }, [editTransaction, isOpen, isStockLedger, isFuturesLedger, defaultDate, activeLedger.feeConfig, activeLedger.id, activeLedger.type])
 
   // 快速帶入上一筆輸入
   const handleCopyLastTx = (lastTx: Transaction) => {
@@ -534,76 +537,40 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   // 當切換 type 時更新預設分類
   const handleTypeChange = (newType: TransactionType) => {
     setType(newType)
-    if (isFuturesLedger) {
-      if (newType === 'stock_buy') setCategory(FUTURES_TRADE_CATEGORIES[0].name)
-      else if (newType === 'stock_sell') setCategory(FUTURES_TRADE_CATEGORIES[1].name)
-      else if (newType === 'income') setCategory(FUTURES_INCOME_CATEGORIES[0].name)
-      else setCategory(FUTURES_EXPENSE_CATEGORIES[0].name)
-      return
+    const nextGroup = resolveCategoryGroupKey(activeLedger.type, newType)
+    const options = loadCategories(nextGroup)
+    if (options.length > 0) {
+      setCategory(options[0].name)
     }
-    if (isStockLedger) {
-      if (newType === 'stock_buy') setCategory('股票買進')
-      else if (newType === 'stock_sell') setCategory('股票賣出')
-      else if (newType === 'dividend') setCategory('現金股息')
-      else if (newType === 'income') setCategory(STOCK_INCOME_CATEGORIES[0].name)
-      else setCategory(STOCK_EXPENSE_CATEGORIES[0].name)
-      return
-    }
-    if (newType === 'stock_buy') setCategory('股票買進')
-    else if (newType === 'stock_sell') setCategory('股票賣出')
-    else if (newType === 'dividend') setCategory('現金股息')
-    else if (newType === 'income') setCategory(INCOME_CATEGORIES[0].name)
-    else setCategory(EXPENSE_CATEGORIES[0].name)
   }
 
-  // 取得目前可選擇的分類列表 (包含系統預設與使用者自訂)
-  const getCategoryOptions = () => {
-    let baseList = EXPENSE_CATEGORIES
-    let currentCatType: 'expense' | 'income' | 'stock' = 'expense'
+  // 目前所屬分類群組 Key
+  const currentCategoryGroupKey = useMemo(() => {
+    return resolveCategoryGroupKey(activeLedger.type, type)
+  }, [activeLedger.type, type])
 
-    if (isFuturesLedger) {
-      if (type === 'stock_buy' || type === 'stock_sell') {
-        baseList = FUTURES_TRADE_CATEGORIES
-        currentCatType = 'stock'
-      } else if (type === 'income') {
-        baseList = FUTURES_INCOME_CATEGORIES
-        currentCatType = 'income'
-      } else {
-        baseList = FUTURES_EXPENSE_CATEGORIES
-        currentCatType = 'expense'
-      }
-    } else if (isStockLedger) {
-      if (type === 'income') {
-        baseList = STOCK_INCOME_CATEGORIES
-        currentCatType = 'income'
-      } else if (type === 'expense') {
-        baseList = STOCK_EXPENSE_CATEGORIES
-        currentCatType = 'expense'
-      } else {
-        baseList = STOCK_CATEGORIES
-        currentCatType = 'stock'
-      }
-    } else {
-      if (type === 'income') {
-        baseList = INCOME_CATEGORIES
-        currentCatType = 'income'
-      } else if (type === 'stock_buy' || type === 'stock_sell' || type === 'dividend') {
-        baseList = STOCK_CATEGORIES
-        currentCatType = 'stock'
-      }
+  // 分類清單 (受 categoryRefreshKey 驅動即時更新)
+  const categoryOptions = useMemo(() => {
+    return loadCategories(currentCategoryGroupKey)
+  }, [currentCategoryGroupKey, categoryRefreshKey])
+
+  // 監聽外部分類更新事件
+  useEffect(() => {
+    const handleCategoryUpdated = () => {
+      setCategoryRefreshKey((prev) => prev + 1)
     }
+    window.addEventListener('ku_categories_updated', handleCategoryUpdated)
+    return () => window.removeEventListener('ku_categories_updated', handleCategoryUpdated)
+  }, [])
 
-    const matchedCustom = customCategories.filter((c) => c.type === currentCatType)
-    const combined = [...baseList]
-    for (const custom of matchedCustom) {
-      if (!combined.some((item) => item.name === custom.name)) {
-        combined.push(custom)
-      }
+  // 若目前所選的 category 不在選項中，自動對齊至第一個
+  useEffect(() => {
+    if (categoryOptions.length > 0 && !categoryOptions.some((c) => c.name === category)) {
+      setCategory(categoryOptions[0].name)
     }
-    return combined
-  }
+  }, [categoryOptions, category])
 
-  // 建立並儲存新的自訂分類
+  // 建立並儲存新的自訂分類 (快速面板)
   const handleAddNewCategory = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     const trimmed = newCatName.trim()
@@ -612,32 +579,67 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       return
     }
 
-    const currentCatType: 'expense' | 'income' | 'stock' =
+    if (categoryOptions.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
+      alert('此分類名稱已存在！')
+      return
+    }
+
+    const currentCatType =
       type === 'income'
         ? 'income'
         : type === 'stock_buy' || type === 'stock_sell' || type === 'dividend'
         ? 'stock'
         : 'expense'
 
-    const currentOptions = getCategoryOptions()
-    if (currentOptions.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
-      alert('此分類名稱已存在！')
-      return
-    }
-
     const newCategoryItem: CategoryItem = {
-      id: `cat-${Date.now()}`,
+      id: `cat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: trimmed,
       type: currentCatType,
       icon: newCatIcon,
       color: newCatColor,
     }
 
-    const updated = addCustomCategory(newCategoryItem)
-    setCustomCategories(updated)
-    setCategory(newCategoryItem.name) // 自動選定新分類
+    const updated = [...categoryOptions, newCategoryItem]
+    saveCategories(currentCategoryGroupKey, updated)
+    setCategory(newCategoryItem.name)
     setNewCatName('')
     setIsAddingCategory(false)
+    setCategoryRefreshKey((prev) => prev + 1)
+  }
+
+  // 處理新增自訂錢包至當前帳本 (分開記錄於 localStorage)
+  const handleAddAccount = () => {
+    const trimmed = newAccountInput.trim()
+    if (!trimmed) return
+    const updated = recordLedgerAccountUsage(activeLedger.id, activeLedger.type, trimmed)
+    setLedgerAccounts(updated)
+    setAccount(trimmed)
+    setNewAccountInput('')
+    setIsAddingCustomAccount(false)
+  }
+
+  // 處理重設當前帳本的常用錢包清單
+  const handleResetAccounts = () => {
+    if (window.confirm(`確定要將「${activeLedger.name}」的常用錢包清單恢復為系統預設值嗎？`)) {
+      const defaults = resetLedgerAccounts(activeLedger.id, activeLedger.type)
+      setLedgerAccounts(defaults)
+      setAccount(defaults[0] || '')
+    }
+  }
+
+  // 處理從此帳本常用清單移除錢包
+  const handleRemoveAccount = (e: React.MouseEvent, accToRemove: string) => {
+    e.stopPropagation()
+    if (ledgerAccounts.length <= 1) {
+      alert('請至少保留一個常用錢包！')
+      return
+    }
+    const filtered = ledgerAccounts.filter((a) => a !== accToRemove)
+    saveLedgerAccounts(activeLedger.id, filtered)
+    setLedgerAccounts(filtered)
+    if (account === accToRemove) {
+      setAccount(filtered[0])
+    }
   }
 
   // 股票自動計算總金額：股數 × 單價 + 手續費 (+ 稅)
@@ -692,11 +694,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       if (tax) transactionData.tax = parseFloat(tax)
     }
 
-    // 記憶使用者輸入之偏好與歷史
+    // 記錄並強化該帳本專屬的常用錢包歷史 (獨立儲存至 localStorage)
+    recordLedgerAccountUsage(activeLedger.id, activeLedger.type, account)
+
+    // 記憶使用者輸入之偏好與歷史 (依帳本分開儲存至 localStorage)
     recordRecentInput({
+      ledgerId: activeLedger.id,
       note: notes.trim(),
       symbol: stockSymbol.trim(),
-      account,
       type,
     })
 
@@ -953,9 +958,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               {/* 歷史輸入項目快捷標籤 */}
               {recentHistory.symbols.length > 0 && (
                 <div className="mt-2">
-                  <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-1">
-                    <History size={11} className="text-emerald-400" />
-                    <span>歷史品項 / 店家 (點選快速填入)：</span>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                    <div className="flex items-center gap-1">
+                      <History size={11} className="text-emerald-400" />
+                      <span>歷史品項 / 店家 (點選快速填入)：</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal">
+                      (已依「{activeLedger.name}」分開記錄)
+                    </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto scrollbar-thin">
                     {recentHistory.symbols.slice(0, 8).map((item) => (
@@ -1462,14 +1472,25 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-medium text-slate-400">選擇分類</label>
-              <button
-                type="button"
-                onClick={() => setIsAddingCategory(!isAddingCategory)}
-                className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors cursor-pointer"
-              >
-                <Plus size={13} />
-                {isAddingCategory ? '收起面板' : '新增自訂分類'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCatManagerOpen(true)}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors cursor-pointer px-2 py-0.5 rounded-lg hover:bg-slate-800 border border-slate-700/60 shadow-sm"
+                  title="自訂名稱、色彩、圖示與排序順序"
+                >
+                  <SlidersHorizontal size={13} />
+                  <span>管理分類 (排序/編輯)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(!isAddingCategory)}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors cursor-pointer px-2 py-0.5 rounded-lg hover:bg-slate-800"
+                >
+                  <Plus size={13} />
+                  {isAddingCategory ? '收起' : '快速新增'}
+                </button>
+              </div>
             </div>
 
             {/* 新增分類面板 */}
@@ -1579,7 +1600,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             )}
 
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {getCategoryOptions().map((cat) => {
+              {categoryOptions.map((cat) => {
                 const isSelected = category === cat.name
                 return (
                   <button
@@ -1603,14 +1624,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 )
               })}
 
-              {/* 網格最後也放置「+ 新增分類」捷徑按鈕 */}
+              {/* 網格最後也放置「管理分類」捷徑按鈕 */}
               <button
                 type="button"
-                onClick={() => setIsAddingCategory(true)}
+                onClick={() => setIsCatManagerOpen(true)}
                 className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-dashed border-slate-700 hover:border-emerald-500/60 bg-slate-800/30 hover:bg-slate-800/60 text-slate-400 hover:text-emerald-400 text-xs font-medium transition-all cursor-pointer"
+                title="管理分類 (自訂/排序/編輯)"
               >
-                <Plus size={14} />
-                <span>新增分類</span>
+                <SlidersHorizontal size={14} />
+                <span>管理分類</span>
               </button>
             </div>
           </div>
@@ -1642,15 +1664,102 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
-          {/* 帳戶選擇 */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">支付 / 收款帳戶</label>
+          {/* 帳戶選擇 (依當前帳本獨立記錄於 localStorage) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-slate-300">
+                <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>支付 / 收款帳戶</span>
+                <span className="text-[10px] text-slate-500 font-normal hidden xs:inline">
+                  (已依「{activeLedger.name}」分開記錄)
+                </span>
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCustomAccount(!isAddingCustomAccount)}
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer font-medium"
+                >
+                  <Plus className="w-3 h-3" />
+                  {isAddingCustomAccount ? '收起' : '自訂錢包'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetAccounts}
+                  title="重設此帳本的預設錢包清單"
+                  className="text-[11px] text-slate-500 hover:text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  重設
+                </button>
+              </div>
+            </div>
+
+            {/* 新增自訂錢包輸入列 */}
+            {isAddingCustomAccount && (
+              <div className="flex items-center gap-2 p-2 bg-slate-800/90 border border-emerald-500/30 rounded-xl animate-in fade-in duration-150">
+                <input
+                  type="text"
+                  value={newAccountInput}
+                  onChange={(e) => setNewAccountInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddAccount()
+                    }
+                  }}
+                  placeholder="輸入新錢包名稱 (如: 國泰世華、街口)..."
+                  className="flex-1 px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleAddAccount}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium shrink-0 cursor-pointer transition-colors"
+                >
+                  加入並使用
+                </button>
+              </div>
+            )}
+
+            {/* 常用錢包快捷標籤群 (單擊秒選) */}
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {ledgerAccounts.map((acc) => {
+                const isSelected = account === acc
+                return (
+                  <div
+                    key={acc}
+                    onClick={() => setAccount(acc)}
+                    className={`group inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer select-none ${
+                      isSelected
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-500/10'
+                        : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/80'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-3 h-3 text-emerald-400 shrink-0" />}
+                    <span>{acc}</span>
+                    {ledgerAccounts.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleRemoveAccount(e, acc)}
+                        title="從常用清單中移除"
+                        className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded transition-opacity ml-0.5"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* 備用下拉選單 */}
             <select
               value={account}
               onChange={(e) => setAccount(e.target.value)}
-              className="w-full px-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              {DEFAULT_ACCOUNTS.map((acc) => (
+              {Array.from(new Set([account, ...ledgerAccounts])).filter(Boolean).map((acc) => (
                 <option key={acc} value={acc}>
                   {acc}
                 </option>
@@ -1695,9 +1804,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {/* 歷史輸入標籤群 */}
             {recentHistory.notes.length > 0 && (
               <div className="mt-2">
-                <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-1">
-                  <History size={12} className="text-emerald-400" />
-                  <span>歷史備註 (點選快速填入)：</span>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                  <div className="flex items-center gap-1">
+                    <History size={12} className="text-emerald-400" />
+                    <span>歷史備註 (點選快速填入)：</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-normal">
+                    (已依「{activeLedger.name}」分開記錄)
+                  </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto scrollbar-thin">
                   {recentHistory.notes.slice(0, 10).map((item) => (
@@ -1749,6 +1863,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* 分類項目管理彈窗 (編輯/刪除/排序) */}
+      <CategoryManagerModal
+        isOpen={isCatManagerOpen}
+        onClose={() => setIsCatManagerOpen(false)}
+        initialGroupKey={currentCategoryGroupKey}
+        onCategoriesChanged={() => setCategoryRefreshKey((prev) => prev + 1)}
+      />
     </div>
   )
 }

@@ -138,8 +138,9 @@ export const importDataFromJSON = (file: File): Promise<StorageData> => {
   })
 }
 
-// 記住使用者歷史輸入紀錄 (常用備註、股票/商品代號、帳戶)
-const RECENT_INPUTS_KEY = 'harvest_money_recent_inputs_v1'
+// 記住使用者歷史輸入紀錄 (依帳本分開儲存：常用備註/品項、股票/商品代號、帳戶、類型)
+const RECENT_INPUTS_KEY_PREFIX = 'ku_money_recent_inputs_v2_'
+const LEGACY_RECENT_INPUTS_KEY = 'harvest_money_recent_inputs_v1'
 
 export interface RecentInputs {
   notes: string[]
@@ -148,24 +149,36 @@ export interface RecentInputs {
   lastType?: string
 }
 
-export const loadRecentInputs = (): RecentInputs => {
+export const loadRecentInputs = (ledgerId?: string): RecentInputs => {
   try {
-    const raw = localStorage.getItem(RECENT_INPUTS_KEY)
-    if (!raw) return { notes: [], symbols: [] }
-    return JSON.parse(raw) as RecentInputs
+    if (ledgerId) {
+      const raw = localStorage.getItem(`${RECENT_INPUTS_KEY_PREFIX}${ledgerId}`)
+      if (raw) {
+        return JSON.parse(raw) as RecentInputs
+      }
+    } else {
+      const raw = localStorage.getItem(LEGACY_RECENT_INPUTS_KEY)
+      if (raw) return JSON.parse(raw) as RecentInputs
+    }
   } catch {
-    return { notes: [], symbols: [] }
+    // 忽略錯誤並返回預設值
   }
+  return { notes: [], symbols: [] }
 }
 
 export const recordRecentInput = (data: {
+  ledgerId?: string
   note?: string
   symbol?: string
   account?: string
   type?: string
 }): void => {
   try {
-    const current = loadRecentInputs()
+    const targetKey = data.ledgerId
+      ? `${RECENT_INPUTS_KEY_PREFIX}${data.ledgerId}`
+      : LEGACY_RECENT_INPUTS_KEY
+
+    const current = loadRecentInputs(data.ledgerId)
     const nextNotes = Array.isArray(current.notes) ? [...current.notes] : []
     const nextSymbols = Array.isArray(current.symbols) ? [...current.symbols] : []
 
@@ -190,9 +203,19 @@ export const recordRecentInput = (data: {
       lastType: data.type || current.lastType,
     }
 
-    localStorage.setItem(RECENT_INPUTS_KEY, JSON.stringify(updated))
+    localStorage.setItem(targetKey, JSON.stringify(updated))
   } catch (err) {
     console.error('Failed to record recent input:', err)
+  }
+}
+
+// 清除特定帳本的歷史品項與標的輸入紀錄
+export const clearLedgerRecentInputs = (ledgerId: string): void => {
+  if (!ledgerId) return
+  try {
+    localStorage.removeItem(`${RECENT_INPUTS_KEY_PREFIX}${ledgerId}`)
+  } catch (err) {
+    console.error('Failed to clear recent inputs for ledger:', err)
   }
 }
 

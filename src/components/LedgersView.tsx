@@ -12,6 +12,7 @@ import {
   parseExcelOrCSVFile,
 } from '../utils/csv'
 import { formatFeeConfigSummary, getDefaultFeeConfig } from '../utils/fee'
+import { loadLedgerAccounts } from '../utils/accountStorage'
 import {
   Plus,
   Edit2,
@@ -29,8 +30,10 @@ import {
   Zap,
   Clock,
   CheckCircle2,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { MergeLedgersModal } from './MergeLedgersModal'
+import { CategoryManagerModal } from './CategoryManagerModal'
 
 interface LedgersViewProps {
   ledgers: Ledger[]
@@ -78,6 +81,7 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
   const jsonFileInputRef = useRef<HTMLInputElement>(null)
   const csvFileInputRef = useRef<HTMLInputElement>(null)
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false)
 
   // 取得當前作用中的帳本
   const activeLedger = ledgers.find((l) => l.id === activeLedgerId) || ledgers[0]
@@ -351,6 +355,28 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
                         {ledger.description}
                       </p>
                     )}
+                    {/* 該帳本專屬常用錢包標籤預覽 */}
+                    {(() => {
+                      const accounts = loadLedgerAccounts(ledger.id, ledger.type)
+                      return (
+                        <div className="flex flex-wrap items-center gap-1 mt-2">
+                          <span className="text-[10px] text-slate-500 font-medium">常用錢包:</span>
+                          {accounts.slice(0, 3).map((acc) => (
+                            <span
+                              key={acc}
+                              className="text-[10px] bg-slate-800/80 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700/50"
+                            >
+                              {acc}
+                            </span>
+                          ))}
+                          {accounts.length > 3 && (
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              +{accounts.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
 
@@ -472,6 +498,29 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
           >
             <FileUp size={15} className="text-emerald-400" />
             匯入 Excel / CSV 明細
+          </button>
+        </div>
+      </div>
+
+      {/* 自訂分類與排序管理 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-slate-100 text-sm flex items-center gap-2">
+              <SlidersHorizontal size={17} className="text-emerald-400" />
+              自訂分類與排序管理
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              自由自訂日常收支、股票投資與期貨交易的分類名稱、代表圖示、色彩與排列順序。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsCategoryManagerOpen(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 rounded-xl text-xs font-semibold text-emerald-400 transition-colors cursor-pointer shrink-0"
+          >
+            <SlidersHorizontal size={14} />
+            開啟分類管理面板
           </button>
         </div>
       </div>
@@ -625,6 +674,12 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
         ledgers={ledgers}
         transactions={transactions}
         onMerge={handleMergeLedgers}
+      />
+
+      {/* 分類管理彈窗 */}
+      <CategoryManagerModal
+        isOpen={isCategoryManagerOpen}
+        onClose={() => setIsCategoryManagerOpen(false)}
       />
     </div>
   )

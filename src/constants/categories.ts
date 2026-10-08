@@ -95,3 +95,18 @@ export const LEDGER_ICONS = [
   { name: 'Car', label: '車輛交通' },
   { name: 'GraduationCap', label: '進修學習' },
 ]
+
+export const CATEGORY_ICONS = [
+  'Tag', 'Coffee', 'Dog', 'Cat', 'Baby', 'Gamepad2', 'Film', 'Music', 
+  'Shirt', 'Book', 'Smile', 'Sparkles', 'Plane', 'Car', 'Home', 'Gift', 
+  'Heart', 'Zap', 'ShoppingBag', 'Utensils', 'DollarSign', 'Coins',
+  'Briefcase', 'GraduationCap', 'HeartPulse', 'Laptop', 'TrendingUp',
+  'TrendingDown', 'PiggyBank', 'Receipt', 'Percent', 'Award', 'Building',
+  'Fuel', 'Bus', 'Train', 'Apple', 'Beer', 'Smartphone', 'CreditCard'
+]
+
+export const CATEGORY_COLORS = [
+  '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', 
+  '#f97316', '#eab308', '#06b6d4', '#ef4444', 
+  '#64748b', '#14b8a6', '#6366f1', '#a855f7'
+]
