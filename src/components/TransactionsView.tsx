@@ -2,6 +2,15 @@ import React, { useState, useMemo, useEffect } from 'react'
 import type { Ledger, Transaction } from '../types'
 import { formatMoney, formatDateTaiwan, formatFullDate } from '../utils/format'
 import {
+  loadLedgerPreferences,
+  saveLedgerPreferences,
+} from '../utils/ledgerPreferences'
+import {
+  groupTransactionsForDisplay,
+  type DisplayTradeItem,
+} from '../utils/tradeGrouping'
+import { ClosedTradeBundleCard } from './ClosedTradeBundleCard'
+import {
   Search,
   SlidersHorizontal,
   TrendingUp,
@@ -32,9 +41,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onOpenNewTransactionWithDate,
   hideBalances,
 }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('calendar')
+  const initialPrefs = useMemo(() => {
+    return loadLedgerPreferences(activeLedger.id, activeLedger.type)
+  }, [activeLedger.id, activeLedger.type])
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return initialPrefs.transactionsViewMode || 'calendar'
+  })
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    saveLedgerPreferences(activeLedger.id, { transactionsViewMode: mode })
+  }
   // 目前年月份字串 (YYYY-MM)
   const currentMonthStr = useMemo(() => new Date().toISOString().substring(0, 7), [])
 
@@ -77,8 +97,13 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     setSelectedMonth(nextStr)
   }
 
-  // 切換帳本時，智慧調整預設選中月份
+  // 切換帳本時，載入該帳本偏好並智慧調整預設選中月份
   useEffect(() => {
+    const prefs = loadLedgerPreferences(activeLedger.id, activeLedger.type)
+    if (prefs.transactionsViewMode) {
+      setViewMode(prefs.transactionsViewMode)
+    }
+
     // 檢查此帳本是否有當前選中的月份
     const hasCurrentSelected = ledgerTxList.some(
       (t) => t.date && t.date.startsWith(selectedMonth)
@@ -92,7 +117,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         setSelectedMonth(latestMonth)
       }
     }
-  }, [activeLedger.id])
+  }, [activeLedger.id, activeLedger.type])
 
   // 月曆專用狀態：目前瀏覽的年與月 (YYYY-MM)，以及點選的特定日期 (YYYY-MM-DD)
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
@@ -130,7 +155,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     })
   }, [ledgerTxList, selectedMonth, typeFilter, searchQuery])
 
-  // 列表模式：依日期排序並分組
+  // 列表模式：依日期排序並分組 (支援買進到完全賣出大明細包裝)
   const groupedByDate = useMemo(() => {
     const sorted = [...filteredTransactions].sort((a, b) => {
       const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -138,15 +163,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       return (b.time || '').localeCompare(a.time || '')
     })
 
-    const groups: { [date: string]: Transaction[] } = {}
-    sorted.forEach((tx) => {
-      if (!groups[tx.date]) {
-        groups[tx.date] = []
+    // 進行出清交易回合封裝
+    const displayItems = groupTransactionsForDisplay(sorted, ledgerTxList)
+
+    const groups: { [date: string]: DisplayTradeItem[] } = {}
+    displayItems.forEach((item) => {
+      const itemDate =
+        item.type === 'single' ? item.transaction.date : item.closedTrade.closeDate
+      if (!groups[itemDate]) {
+        groups[itemDate] = []
       }
-      groups[tx.date].push(tx)
+      groups[itemDate].push(item)
     })
     return groups
-  }, [filteredTransactions])
+  }, [filteredTransactions, ledgerTxList])
 
   // 篩選後交易的總計統計 (正的跟負的加起來)
   const filterSummary = useMemo(() => {
@@ -280,6 +310,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       .sort((a, b) => (b.time || '').localeCompare(a.time || ''))
   }, [ledgerTxList, selectedDate])
 
+  // 當前選取日期的顯示項目 (支援大明細封裝)
+  const selectedDateDisplayItems = useMemo(() => {
+    return groupTransactionsForDisplay(selectedDateTransactions, ledgerTxList)
+  }, [selectedDateTransactions, ledgerTxList])
+
   // 當前選取日期的正負相加總金額
   const selectedDayNet = useMemo(() => {
     let income = 0
@@ -341,7 +376,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
         <div className="flex items-center p-1 bg-slate-900 border border-slate-800 rounded-xl">
           <button
-            onClick={() => setViewMode('calendar')}
+            onClick={() => handleViewModeChange('calendar')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               viewMode === 'calendar'
                 ? 'bg-emerald-500 text-slate-950 shadow-md font-semibold'
@@ -352,7 +387,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             月曆
           </button>
           <button
-            onClick={() => setViewMode('list')}
+            onClick={() => handleViewModeChange('list')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               viewMode === 'list'
                 ? 'bg-emerald-500 text-slate-950 shadow-md font-semibold'
@@ -553,7 +588,21 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               </div>
             ) : (
               <div className="divide-y divide-slate-800/60">
-                {selectedDateTransactions.map((tx) => {
+                {selectedDateDisplayItems.map((item) => {
+                  if (item.type === 'closed_bundle') {
+                    return (
+                      <div key={item.closedTrade.id} className="py-2">
+                        <ClosedTradeBundleCard
+                          closedTrade={item.closedTrade}
+                          currency={activeLedger.currency}
+                          hideBalances={hideBalances}
+                          onSelectTransaction={onSelectTransaction}
+                        />
+                      </div>
+                    )
+                  }
+
+                  const tx = item.transaction
                   const isIncome =
                     tx.type === 'income' || tx.type === 'stock_sell' || tx.type === 'dividend'
                   return (
@@ -584,30 +633,33 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                             {tx.type === 'expense' && <TrendingDown size={16} />}
                           </div>
 
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
-                                {tx.category}
-                              </span>
-                              {tx.stockSymbol && (
-                                <span
-                                  className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
-                                    activeLedger.type === 'futures'
-                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                      : activeLedger.type === 'stock'
-                                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                  }`}
-                                >
-                                  {tx.stockSymbol}
-                                </span>
-                              )}
-                              {tx.shares && (
-                                <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
-                                  {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'}
-                                </span>
-                              )}
+                          <div className="min-w-0 flex-1">
+                            {/* 分類：最上面自成一行 */}
+                            <div className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                              {tx.category}
                             </div>
+                            {(tx.stockSymbol || tx.shares) && (
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                {tx.stockSymbol && (
+                                  <span
+                                    className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
+                                      activeLedger.type === 'futures'
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                        : activeLedger.type === 'stock'
+                                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                    }`}
+                                  >
+                                    {tx.stockSymbol}
+                                  </span>
+                                )}
+                                {tx.shares && (
+                                  <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
+                                    {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'} {tx.pricePerShare ? `@ ${tx.pricePerShare}` : ''}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 truncate">
                               {tx.time && <span className="shrink-0">{tx.time}</span>}
                               <span className="shrink-0">• {tx.account}</span>
@@ -804,10 +856,18 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                 let dayIncome = 0
                 let dayExpense = 0
                 items.forEach((item) => {
-                  if (item.type === 'income' || item.type === 'stock_sell' || item.type === 'dividend') {
-                    dayIncome += item.amount
+                  if (item.type === 'closed_bundle') {
+                    dayIncome += item.closedTrade.totalSellRevenue
+                    item.closedTrade.buys.forEach((b) => {
+                      if (b.date === dateStr) dayExpense += b.amount
+                    })
                   } else {
-                    dayExpense += item.amount
+                    const tx = item.transaction
+                    if (tx.type === 'income' || tx.type === 'stock_sell' || tx.type === 'dividend') {
+                      dayIncome += tx.amount
+                    } else {
+                      dayExpense += tx.amount
+                    }
                   }
                 })
                 const dayNet = dayIncome - dayExpense
@@ -850,7 +910,21 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
                     {/* 當日記錄明細 */}
                     <div className="divide-y divide-slate-800/50">
-                      {items.map((tx) => {
+                      {items.map((item) => {
+                        if (item.type === 'closed_bundle') {
+                          return (
+                            <div key={item.closedTrade.id} className="p-3">
+                              <ClosedTradeBundleCard
+                                closedTrade={item.closedTrade}
+                                currency={activeLedger.currency}
+                                hideBalances={hideBalances}
+                                onSelectTransaction={onSelectTransaction}
+                              />
+                            </div>
+                          )
+                        }
+
+                        const tx = item.transaction
                         const isIncome =
                           tx.type === 'income' || tx.type === 'stock_sell' || tx.type === 'dividend'
 
@@ -882,30 +956,33 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                   {tx.type === 'expense' && <TrendingDown size={18} />}
                                 </div>
 
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
-                                      {tx.category}
-                                    </span>
-                                    {tx.stockSymbol && (
-                                      <span
-                                        className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
-                                          activeLedger.type === 'futures'
-                                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                            : activeLedger.type === 'stock'
-                                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                        }`}
-                                      >
-                                        {tx.stockSymbol}
-                                      </span>
-                                    )}
-                                    {tx.shares && (
-                                      <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
-                                        {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'} @ {tx.pricePerShare || ''}
-                                      </span>
-                                    )}
+                                <div className="min-w-0 flex-1">
+                                  {/* 分類：最上面自成一行 */}
+                                  <div className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                                    {tx.category}
                                   </div>
+                                  {(tx.stockSymbol || tx.shares) && (
+                                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                      {tx.stockSymbol && (
+                                        <span
+                                          className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
+                                            activeLedger.type === 'futures'
+                                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                              : activeLedger.type === 'stock'
+                                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                          }`}
+                                        >
+                                          {tx.stockSymbol}
+                                        </span>
+                                      )}
+                                      {tx.shares && (
+                                        <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
+                                          {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'} {tx.pricePerShare ? `@ ${tx.pricePerShare}` : ''}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
 
                                   <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 truncate">
                                     {tx.time && <span className="shrink-0">{tx.time}</span>}

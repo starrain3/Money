@@ -1,6 +1,12 @@
-import React, { useMemo, useState, useCallback } from 'react'
+import React, { useMemo, useState, useCallback, useEffect } from 'react'
 import type { Ledger, Transaction } from '../types'
 import { formatMoney, formatDateTaiwan } from '../utils/format'
+import {
+  loadLedgerPreferences,
+  saveLedgerPreferences,
+  getDefaultTimeRangeForLedger,
+  type OverviewTimeRange,
+} from '../utils/ledgerPreferences'
 import { DynamicIcon } from './DynamicIcon'
 import {
   TrendingUp,
@@ -27,7 +33,7 @@ interface OverviewViewProps {
   hideBalances: boolean
 }
 
-type TimeRange = 'all' | 'month' | 'year'
+type TimeRange = OverviewTimeRange
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
   activeLedger,
@@ -40,17 +46,54 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const isFutures = activeLedger.type === 'futures'
   const isStock = activeLedger.type === 'stock'
 
-  // 時間範圍選擇：期貨與股票帳本預設看「全部累計」，一般帳本預設看「按月」
-  const [timeRange, setTimeRange] = useState<TimeRange>(
-    isFutures || isStock ? 'all' : 'month'
-  )
-
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
 
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear)
-  const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth)
+  // 依當前帳本獨立載入偏好 (全部 / 按月 / 按年，以及選取之年與月)
+  const initialPrefs = useMemo(() => {
+    return loadLedgerPreferences(activeLedger.id, activeLedger.type)
+  }, [activeLedger.id, activeLedger.type])
+
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    return initialPrefs.overviewTimeRange || getDefaultTimeRangeForLedger(activeLedger.type)
+  })
+  const [selectedYear, setSelectedYear] = useState<number>(() => {
+    return initialPrefs.overviewYear || currentYear
+  })
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => {
+    return initialPrefs.overviewMonth || currentMonth
+  })
+
+  // 當切換帳本 (activeLedger.id 改變) 時，同步自動載入該帳本專屬的偏好
+  useEffect(() => {
+    const prefs = loadLedgerPreferences(activeLedger.id, activeLedger.type)
+    setTimeRange(prefs.overviewTimeRange || getDefaultTimeRangeForLedger(activeLedger.type))
+    if (prefs.overviewYear) {
+      setSelectedYear(prefs.overviewYear)
+    }
+    if (prefs.overviewMonth) {
+      setSelectedMonth(prefs.overviewMonth)
+    }
+  }, [activeLedger.id, activeLedger.type])
+
+  // 切換時間範圍並儲存至當前帳本
+  const handleTimeRangeChange = (newRange: TimeRange) => {
+    setTimeRange(newRange)
+    saveLedgerPreferences(activeLedger.id, { overviewTimeRange: newRange })
+  }
+
+  // 切換年份並儲存至當前帳本
+  const handleYearChange = (year: number) => {
+    setSelectedYear(year)
+    saveLedgerPreferences(activeLedger.id, { overviewYear: year })
+  }
+
+  // 切換月份並儲存至當前帳本
+  const handleMonthChange = (month: number) => {
+    setSelectedMonth(month)
+    saveLedgerPreferences(activeLedger.id, { overviewMonth: month })
+  }
 
   // 當前帳本所有交易
   const ledgerTxList = useMemo(() => {
@@ -496,40 +539,57 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   // 切換月份
   const handlePrevMonth = () => {
     if (selectedMonth === 1) {
-      setSelectedYear((prev) => prev - 1)
+      const nextY = selectedYear - 1
+      setSelectedYear(nextY)
       setSelectedMonth(12)
+      saveLedgerPreferences(activeLedger.id, { overviewYear: nextY, overviewMonth: 12 })
     } else {
-      setSelectedMonth((prev) => prev - 1)
+      const nextM = selectedMonth - 1
+      setSelectedMonth(nextM)
+      saveLedgerPreferences(activeLedger.id, { overviewMonth: nextM })
     }
   }
 
   const handleNextMonth = () => {
     if (selectedMonth === 12) {
-      setSelectedYear((prev) => prev + 1)
+      const nextY = selectedYear + 1
+      setSelectedYear(nextY)
       setSelectedMonth(1)
+      saveLedgerPreferences(activeLedger.id, { overviewYear: nextY, overviewMonth: 1 })
     } else {
-      setSelectedMonth((prev) => prev + 1)
+      const nextM = selectedMonth + 1
+      setSelectedMonth(nextM)
+      saveLedgerPreferences(activeLedger.id, { overviewMonth: nextM })
     }
   }
 
   // 切換年份
   const handlePrevYear = () => {
-    setSelectedYear((prev) => prev - 1)
+    const nextY = selectedYear - 1
+    setSelectedYear(nextY)
+    saveLedgerPreferences(activeLedger.id, { overviewYear: nextY })
   }
 
   const handleNextYear = () => {
-    setSelectedYear((prev) => prev + 1)
+    const nextY = selectedYear + 1
+    setSelectedYear(nextY)
+    saveLedgerPreferences(activeLedger.id, { overviewYear: nextY })
   }
 
   // 重置回當前月/今年
   const handleResetToCurrentMonth = () => {
     const today = new Date()
-    setSelectedYear(today.getFullYear())
-    setSelectedMonth(today.getMonth() + 1)
+    const nextY = today.getFullYear()
+    const nextM = today.getMonth() + 1
+    setSelectedYear(nextY)
+    setSelectedMonth(nextM)
+    saveLedgerPreferences(activeLedger.id, { overviewYear: nextY, overviewMonth: nextM })
   }
 
   const handleResetToCurrentYear = () => {
-    setSelectedYear(new Date().getFullYear())
+    const nextY = new Date().getFullYear()
+    setSelectedYear(nextY)
+    saveLedgerPreferences(activeLedger.id, { overviewYear: nextY })
   }
 
   const isCurrentMonthSelected =
@@ -598,7 +658,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             {/* 時間範圍切換開關 */}
             <div className="flex bg-black/40 backdrop-blur-md p-0.5 rounded-xl border border-white/10 text-[11px]">
               <button
-                onClick={() => setTimeRange('all')}
+                onClick={() => handleTimeRangeChange('all')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                   timeRange === 'all'
                     ? 'bg-white/20 text-white shadow-sm'
@@ -608,7 +668,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 全部
               </button>
               <button
-                onClick={() => setTimeRange('month')}
+                onClick={() => handleTimeRangeChange('month')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                   timeRange === 'month'
                     ? 'bg-white/20 text-white shadow-sm'
@@ -618,7 +678,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 按月
               </button>
               <button
-                onClick={() => setTimeRange('year')}
+                onClick={() => handleTimeRangeChange('year')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                   timeRange === 'year'
                     ? 'bg-white/20 text-white shadow-sm'
@@ -656,7 +716,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <Calendar size={15} className="text-emerald-400" />
                 <select
                   value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  onChange={(e) => handleYearChange(Number(e.target.value))}
                   className="bg-white/10 text-white font-bold text-xs sm:text-sm rounded-lg px-2 py-0.5 border border-white/10 focus:outline-none cursor-pointer"
                 >
                   {availableYears.map((yr) => (
@@ -702,7 +762,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 return (
                   <button
                     key={m}
-                    onClick={() => setSelectedMonth(m)}
+                    onClick={() => handleMonthChange(m)}
                     className={`flex-1 min-w-[34px] py-1 rounded-lg text-xs font-medium shrink-0 transition-all cursor-pointer relative text-center ${
                       isSelected
                         ? 'bg-white text-slate-900 font-bold shadow-md'
@@ -769,7 +829,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 return (
                   <button
                     key={yr}
-                    onClick={() => setSelectedYear(yr)}
+                    onClick={() => handleYearChange(yr)}
                     className={`px-3 py-1 rounded-lg text-xs font-medium shrink-0 transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-white text-slate-900 font-bold shadow-md'
@@ -1212,28 +1272,31 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         )}
                       </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
-                            {tx.category}
-                          </span>
-                          {tx.stockSymbol && (
-                            <span
-                              className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
-                                isFutures
-                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                  : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                              }`}
-                            >
-                              {tx.stockSymbol}
-                            </span>
-                          )}
-                          {tx.shares && (
-                            <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
-                              {tx.shares} {isFutures ? '口' : '股'} @ {tx.pricePerShare || ''}
-                            </span>
-                          )}
+                      <div className="min-w-0 flex-1">
+                        {/* 分類：最上面自成一行 */}
+                        <div className="font-medium text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                          {tx.category}
                         </div>
+                        {(tx.stockSymbol || tx.shares) && (
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {tx.stockSymbol && (
+                              <span
+                                className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
+                                  isFutures
+                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                    : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                                }`}
+                              >
+                                {tx.stockSymbol}
+                              </span>
+                            )}
+                            {tx.shares && (
+                              <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
+                                {tx.shares} {isFutures ? '口' : '股'} {tx.pricePerShare ? `@ ${tx.pricePerShare}` : ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 truncate">
                           <span className="shrink-0">{formatDateTaiwan(tx.date)}</span>
                           {tx.time && <span className="shrink-0">{tx.time}</span>}
