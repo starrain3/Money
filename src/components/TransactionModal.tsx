@@ -4,6 +4,8 @@ import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   STOCK_CATEGORIES,
+  STOCK_EXPENSE_CATEGORIES,
+  STOCK_INCOME_CATEGORIES,
   FUTURES_TRADE_CATEGORIES,
   FUTURES_EXPENSE_CATEGORIES,
   FUTURES_INCOME_CATEGORIES,
@@ -539,6 +541,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       else setCategory(FUTURES_EXPENSE_CATEGORIES[0].name)
       return
     }
+    if (isStockLedger) {
+      if (newType === 'stock_buy') setCategory('股票買進')
+      else if (newType === 'stock_sell') setCategory('股票賣出')
+      else if (newType === 'dividend') setCategory('現金股息')
+      else if (newType === 'income') setCategory(STOCK_INCOME_CATEGORIES[0].name)
+      else setCategory(STOCK_EXPENSE_CATEGORIES[0].name)
+      return
+    }
     if (newType === 'stock_buy') setCategory('股票買進')
     else if (newType === 'stock_sell') setCategory('股票賣出')
     else if (newType === 'dividend') setCategory('現金股息')
@@ -561,6 +571,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       } else {
         baseList = FUTURES_EXPENSE_CATEGORIES
         currentCatType = 'expense'
+      }
+    } else if (isStockLedger) {
+      if (type === 'income') {
+        baseList = STOCK_INCOME_CATEGORIES
+        currentCatType = 'income'
+      } else if (type === 'expense') {
+        baseList = STOCK_EXPENSE_CATEGORIES
+        currentCatType = 'expense'
+      } else {
+        baseList = STOCK_CATEGORIES
+        currentCatType = 'stock'
       }
     } else {
       if (type === 'income') {
@@ -956,8 +977,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           )}
 
-          {/* 若為股票帳本或非期貨之股票類型，提供股票專屬欄位 */}
-          {!isFuturesLedger && (isStockLedger || type === 'stock_buy' || type === 'stock_sell' || type === 'dividend') && (
+          {/* 若為股票交易類型 (買進/賣出/股息)，提供股票專屬欄位 */}
+          {!isFuturesLedger && (type === 'stock_buy' || type === 'stock_sell' || type === 'dividend') && (
             <div className="p-3 bg-slate-800/40 border border-slate-700/60 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">

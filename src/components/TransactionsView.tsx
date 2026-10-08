@@ -32,7 +32,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onOpenNewTransactionWithDate,
   hideBalances,
 }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [viewMode, setViewMode] = useState<ViewMode>('calendar')
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   // 目前年月份字串 (YYYY-MM)
@@ -341,17 +341,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
         <div className="flex items-center p-1 bg-slate-900 border border-slate-800 rounded-xl">
           <button
-            onClick={() => setViewMode('list')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-              viewMode === 'list'
-                ? 'bg-emerald-500 text-slate-950 shadow-md font-semibold'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <ListIcon size={14} />
-            列表
-          </button>
-          <button
             onClick={() => setViewMode('calendar')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               viewMode === 'calendar'
@@ -361,6 +350,17 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           >
             <CalendarIcon size={14} />
             月曆
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              viewMode === 'list'
+                ? 'bg-emerald-500 text-slate-950 shadow-md font-semibold'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <ListIcon size={14} />
+            列表
           </button>
         </div>
       </div>

@@ -28,6 +28,20 @@ export const STOCK_CATEGORIES: CategoryItem[] = [
   { id: 'stk_fee', name: '交易稅費', type: 'stock', icon: 'Receipt', color: '#ef4444' },
 ]
 
+export const STOCK_EXPENSE_CATEGORIES: CategoryItem[] = [
+  { id: 'stk_exp_fee', name: '交易稅費', type: 'expense', icon: 'Receipt', color: '#ef4444' },
+  { id: 'stk_exp_interest', name: '融資利息', type: 'expense', icon: 'Percent', color: '#f97316' },
+  { id: 'stk_exp_borrow', name: '借券費用', type: 'expense', icon: 'Coins', color: '#f59e0b' },
+  { id: 'stk_exp_software', name: '看盤軟體費', type: 'expense', icon: 'Laptop', color: '#8b5cf6' },
+  { id: 'stk_exp_other', name: '其他投資支出', type: 'expense', icon: 'MoreHorizontal', color: '#64748b' },
+]
+
+export const STOCK_INCOME_CATEGORIES: CategoryItem[] = [
+  { id: 'stk_inc_rebate', name: '手續費折讓/退佣', type: 'income', icon: 'PiggyBank', color: '#10b981' },
+  { id: 'stk_inc_lending', name: '出借股票利息', type: 'income', icon: 'Coins', color: '#eab308' },
+  { id: 'stk_inc_other', name: '其他投資收入', type: 'income', icon: 'MoreHorizontal', color: '#06b6d4' },
+]
+
 export const FUTURES_TRADE_CATEGORIES: CategoryItem[] = [
   { id: 'fut_buy_open', name: '買進建倉', type: 'stock', icon: 'ArrowDownRight', color: '#3b82f6' },
   { id: 'fut_sell_close', name: '賣出平倉', type: 'stock', icon: 'ArrowUpRight', color: '#10b981' },

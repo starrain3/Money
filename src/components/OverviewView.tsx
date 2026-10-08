@@ -153,6 +153,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     if (!isStock) {
       return {
         realizedTradingPnL: 0,
+        netTradingPnL: 0,
         dividendTotal: 0,
         otherExpenseTotal: 0,
         otherIncomeTotal: 0,
@@ -202,14 +203,21 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         return
       }
 
-      if (t.type === 'expense') {
+      if (
+        t.type === 'expense' ||
+        t.category === '交易稅費' ||
+        (!t.shares && !t.pricePerShare && (t.category.includes('費用') || t.category.includes('稅') || t.category.includes('支出') || t.category.includes('利息')))
+      ) {
         if (inCurrentFilter) {
           otherExpenseTotal += t.amount
         }
         return
       }
 
-      if (t.type === 'income') {
+      if (
+        t.type === 'income' ||
+        (!t.shares && !t.pricePerShare && (t.category.includes('退佣') || t.category.includes('折讓') || t.category.includes('收入') || t.category.includes('利息補貼')))
+      ) {
         if (inCurrentFilter) {
           otherIncomeTotal += t.amount
         }
@@ -304,12 +312,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       }
     })
 
+    const netTradingPnL = Math.round(
+      realizedTradingPnL - otherExpenseTotal + otherIncomeTotal
+    )
+
     const totalRealizedPnL = Math.round(
       realizedTradingPnL + dividendTotal - otherExpenseTotal + otherIncomeTotal
     )
 
     return {
       realizedTradingPnL: Math.round(realizedTradingPnL),
+      netTradingPnL,
       dividendTotal: Math.round(dividendTotal),
       otherExpenseTotal: Math.round(otherExpenseTotal),
       otherIncomeTotal: Math.round(otherIncomeTotal),
@@ -868,23 +881,36 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </>
           ) : isStock ? (
             <>
-              {/* 股票：已實現交易損益 */}
+              {/* 股票：已實現交易損益 (已扣除其他費用) */}
               <div className="bg-slate-900/50 backdrop-blur-md border border-white/10 rounded-2xl p-3.5">
-                <div className="flex items-center gap-1.5 text-blue-400 text-xs mb-1 font-medium">
-                  <TrendingUp size={14} /> 已實現交易損益
+                <div className="flex items-center justify-between text-xs mb-1 font-medium text-blue-400">
+                  <span className="flex items-center gap-1.5">
+                    <TrendingUp size={14} /> 已實現交易損益
+                  </span>
+                  {stockPortfolio.otherExpenseTotal > 0 && (
+                    <span className="text-[10px] text-rose-300/80 bg-rose-500/10 px-1.5 py-0.2 rounded">
+                      含費用折抵
+                    </span>
+                  )}
                 </div>
                 <div
                   className={`text-lg font-bold ${
-                    stockPortfolio.realizedTradingPnL >= 0
+                    stockPortfolio.netTradingPnL >= 0
                       ? 'text-emerald-400'
                       : 'text-rose-400'
                   }`}
                 >
-                  {stockPortfolio.realizedTradingPnL > 0 ? '+' : ''}
+                  {stockPortfolio.netTradingPnL > 0 ? '+' : ''}
                   {maskValue(
-                    formatMoney(stockPortfolio.realizedTradingPnL, activeLedger.currency)
+                    formatMoney(stockPortfolio.netTradingPnL, activeLedger.currency)
                   )}
                 </div>
+                {stockPortfolio.otherExpenseTotal > 0 && (
+                  <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between pt-1 border-t border-white/5">
+                    <span>價差 {stockPortfolio.realizedTradingPnL > 0 ? '+' : ''}{maskValue(formatMoney(stockPortfolio.realizedTradingPnL, activeLedger.currency))}</span>
+                    <span className="text-rose-400/90">費用 -{maskValue(formatMoney(stockPortfolio.otherExpenseTotal, activeLedger.currency))}</span>
+                  </div>
+                )}
               </div>
 
               {/* 股票：累積股息 */}
