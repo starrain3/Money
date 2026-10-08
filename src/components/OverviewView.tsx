@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useCallback } from 'react'
 import type { Ledger, Transaction } from '../types'
 import { formatMoney, formatDateTaiwan } from '../utils/format'
 import { DynamicIcon } from './DynamicIcon'
@@ -11,7 +11,6 @@ import {
   PiggyBank,
   AlertCircle,
   FileText,
-  Zap,
   Percent,
   Package,
   ChevronLeft,
@@ -88,17 +87,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const selectedYearPrefix = `${selectedYear}`
 
   // 判斷某筆交易日期是否符合目前選擇的時間範圍
-  const isDateInFilter = (dateStr: string) => {
+  const isDateInFilter = useCallback((dateStr: string) => {
     if (timeRange === 'all') return true
     if (timeRange === 'month') return dateStr.startsWith(selectedMonthPrefix)
     if (timeRange === 'year') return dateStr.startsWith(selectedYearPrefix)
     return true
-  }
+  }, [timeRange, selectedMonthPrefix, selectedYearPrefix])
 
   // 依時間範圍篩選後的交易清單
   const filteredTxList = useMemo(() => {
     return ledgerTxList.filter((t) => isDateInFilter(t.date))
-  }, [ledgerTxList, timeRange, selectedMonthPrefix, selectedYearPrefix])
+  }, [ledgerTxList, isDateInFilter])
 
   // 財務與投資統計數值
   const stats = useMemo(() => {
@@ -155,6 +154,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       return {
         realizedTradingPnL: 0,
         dividendTotal: 0,
+        otherExpenseTotal: 0,
+        otherIncomeTotal: 0,
         totalRealizedPnL: 0,
         holdings: [],
         totalHoldingCost: 0,
@@ -177,6 +178,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
     let dividendTotal = 0
     let realizedTradingPnL = 0
+    let otherExpenseTotal = 0
+    let otherIncomeTotal = 0
 
     const holdingsMap = new Map<
       string,
@@ -195,6 +198,20 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       if (t.type === 'dividend') {
         if (inCurrentFilter) {
           dividendTotal += t.amount
+        }
+        return
+      }
+
+      if (t.type === 'expense') {
+        if (inCurrentFilter) {
+          otherExpenseTotal += t.amount
+        }
+        return
+      }
+
+      if (t.type === 'income') {
+        if (inCurrentFilter) {
+          otherIncomeTotal += t.amount
         }
         return
       }
@@ -287,14 +304,20 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       }
     })
 
+    const totalRealizedPnL = Math.round(
+      realizedTradingPnL + dividendTotal - otherExpenseTotal + otherIncomeTotal
+    )
+
     return {
       realizedTradingPnL: Math.round(realizedTradingPnL),
       dividendTotal: Math.round(dividendTotal),
-      totalRealizedPnL: Math.round(realizedTradingPnL + dividendTotal),
+      otherExpenseTotal: Math.round(otherExpenseTotal),
+      otherIncomeTotal: Math.round(otherIncomeTotal),
+      totalRealizedPnL,
       holdings: holdingsList,
       totalHoldingCost: Math.round(totalHoldingCost),
     }
-  }, [ledgerTxList, isStock, timeRange, selectedMonthPrefix, selectedYearPrefix])
+  }, [ledgerTxList, isStock, isDateInFilter])
 
   // 期貨專屬：已實現平倉損益與未平倉契約部位
   const futuresPortfolio = useMemo(() => {
@@ -315,64 +338,142 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     let profitCount = 0
     let lossCount = 0
 
+    // 依時間升序排列所有交易以計算未平倉合約部位撮合
+    const sortedTx = [...ledgerTxList].sort((a, b) => {
+      const dateDiff = (a.date || '').localeCompare(b.date || '')
+      if (dateDiff !== 0) return dateDiff
+      const timeDiff = (a.time || '').localeCompare(b.time || '')
+      if (timeDiff !== 0) return timeDiff
+      if (a.stockSymbol === b.stockSymbol && a.type !== b.type) {
+        if (a.type === 'stock_buy') return -1
+        if (b.type === 'stock_buy') return 1
+      }
+      return 0
+    })
+
     const positionsMap = new Map<
       string,
       {
         symbol: string
-        buyLots: number
-        sellLots: number
+        openLots: number
+        totalCost: number
         lastPrice?: number
+        lastDate?: string
       }
     >()
 
-    filteredTxList.forEach((t) => {
-      const sym = (t.stockSymbol || '期貨契約').trim()
+    sortedTx.forEach((t) => {
+      const inCurrentFilter = isDateInFilter(t.date)
+      const sym = (t.stockSymbol || t.category || '期貨契約').trim()
       const existing = positionsMap.get(sym) || {
         symbol: sym,
-        buyLots: 0,
-        sellLots: 0,
+        openLots: 0,
+        totalCost: 0,
       }
 
-      const lots = t.shares || 1
-      const isBuy = t.notes?.includes('買') || t.category.includes('買')
-      const isSell = t.notes?.includes('賣') || t.category.includes('賣')
+      const s = t.shares || 1
+      const p = t.pricePerShare || 0
 
-      if (isBuy) existing.buyLots += lots
-      else if (isSell) existing.sellLots += lots
+      if (t.type === 'stock_buy') {
+        const cost = t.amount || (s * p + (t.fee || 0))
+        existing.openLots += s
+        existing.totalCost += cost
+        if (p > 0) existing.lastPrice = p
+        existing.lastDate = t.date
+        positionsMap.set(sym, existing)
+      } else if (t.type === 'stock_sell') {
+        const revenue = t.amount || (s * p - (t.fee || 0) - (t.tax || 0))
+        let pnl = 0
 
-      if (t.type === 'income') {
-        profitTotal += t.amount
-        profitCount++
+        if (existing.openLots > 0 && s > 0) {
+          if (s >= existing.openLots) {
+            // 全數平倉
+            const costOfSold = existing.totalCost
+            pnl = revenue - costOfSold
+            existing.openLots = 0
+            existing.totalCost = 0
+          } else {
+            // 部分平倉
+            const avgCostPerLot = existing.totalCost / existing.openLots
+            const costOfSold = s * avgCostPerLot
+            pnl = revenue - costOfSold
+            existing.openLots -= s
+            existing.totalCost -= costOfSold
+            if (existing.openLots < 0.0001 || existing.totalCost < 0.01) {
+              existing.openLots = 0
+              existing.totalCost = 0
+            }
+          }
+        } else {
+          // 無歷史建倉直接賣出平倉
+          pnl = revenue
+          existing.openLots = 0
+          existing.totalCost = 0
+        }
+
+        if (inCurrentFilter) {
+          if (pnl >= 0) {
+            profitTotal += pnl
+            profitCount++
+          } else {
+            lossTotal += Math.abs(pnl)
+            lossCount++
+          }
+        }
+
+        if (p > 0) existing.lastPrice = p
+        existing.lastDate = t.date
+        positionsMap.set(sym, existing)
+      } else if (t.type === 'income') {
+        // 向下相容：直接記錄平倉獲利或收入
+        if (inCurrentFilter) {
+          profitTotal += t.amount
+          profitCount++
+        }
       } else if (t.type === 'expense') {
-        lossTotal += t.amount
-        lossCount++
+        // 向下相容：直接記錄平倉虧損或費用
+        if (inCurrentFilter) {
+          lossTotal += t.amount
+          lossCount++
+        }
       }
-
-      positionsMap.set(sym, existing)
     })
 
-    const realizedPnL = profitTotal - lossTotal
+    const realizedPnL = Math.round(profitTotal - lossTotal)
     const totalTrades = profitCount + lossCount
     const winRate = totalTrades > 0 ? Math.round((profitCount / totalTrades) * 100) : 0
 
-    const openPositions: Array<{ symbol: string; openLots: number }> = []
+    const openPositions: Array<{
+      symbol: string
+      openLots: number
+      avgPrice: number
+      totalCost: number
+      lastDate?: string
+    }> = []
+
     positionsMap.forEach((pos) => {
-      const netLots = pos.buyLots - pos.sellLots
-      if (netLots > 0) {
-        openPositions.push({ symbol: pos.symbol, openLots: netLots })
+      if (pos.openLots > 0.0001) {
+        const avg = pos.openLots > 0 && pos.totalCost > 0 ? Math.round((pos.totalCost / pos.openLots) * 100) / 100 : (pos.lastPrice || 0)
+        openPositions.push({
+          symbol: pos.symbol,
+          openLots: Math.round(pos.openLots * 100) / 100,
+          avgPrice: avg,
+          totalCost: Math.round(pos.totalCost),
+          lastDate: pos.lastDate,
+        })
       }
     })
 
     return {
       realizedPnL,
-      profitTotal,
-      lossTotal,
+      profitTotal: Math.round(profitTotal),
+      lossTotal: Math.round(lossTotal),
       profitCount,
       lossCount,
       winRate,
       openPositions,
     }
-  }, [filteredTxList, isFutures])
+  }, [ledgerTxList, isFutures, isDateInFilter])
 
   // 預算計算 (一般收支帳本適用)
   const budget = activeLedger.budgetMonthly || 0
@@ -676,7 +777,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             {isFutures
               ? '已實現平倉淨損益 (獲利 - 虧損)'
               : isStock
-              ? '已實現總損益 (交易損益 + 現金股息)'
+              ? stockPortfolio.otherExpenseTotal > 0
+                ? '已實現總損益 (交易損益 + 股息 - 其他費用)'
+                : '已實現總損益 (交易損益 + 現金股息)'
               : '收支結餘'}
           </div>
           <div className="text-3xl sm:text-4xl font-extrabold tracking-tight flex items-baseline gap-1">
@@ -795,6 +898,34 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   )}
                 </div>
               </div>
+
+              {/* 股票：其他費用支出 */}
+              {stockPortfolio.otherExpenseTotal > 0 && (
+                <div className="bg-slate-900/50 backdrop-blur-md border border-rose-500/20 rounded-2xl p-3.5">
+                  <div className="flex items-center gap-1.5 text-rose-400 text-xs mb-1 font-medium">
+                    <TrendingDown size={14} /> 其他費用支出
+                  </div>
+                  <div className="text-lg font-bold text-rose-400">
+                    -{maskValue(
+                      formatMoney(stockPortfolio.otherExpenseTotal, activeLedger.currency)
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 股票：其他投資收入 */}
+              {stockPortfolio.otherIncomeTotal > 0 && (
+                <div className="bg-slate-900/50 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-3.5">
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs mb-1 font-medium">
+                    <TrendingUp size={14} /> 其他投資收入
+                  </div>
+                  <div className="text-lg font-bold text-emerald-400">
+                    +{maskValue(
+                      formatMoney(stockPortfolio.otherIncomeTotal, activeLedger.currency)
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* 股票：當前持股成本 (未實現) */}
               <div className="bg-slate-900/50 backdrop-blur-md border border-white/10 rounded-2xl p-3.5 col-span-2 sm:col-span-1">
@@ -956,8 +1087,20 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       未平倉 {p.openLots.toLocaleString()} 口
                     </span>
                   </div>
-                  <div className="text-xs text-slate-400 pt-1 border-t border-white/5">
-                    請至交易明細或記帳彈窗記錄平倉損益
+                  {p.avgPrice > 0 && (
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-white/5">
+                      <span>平均建倉點位</span>
+                      <span className="text-slate-200 font-medium">{p.avgPrice.toLocaleString()} 點</span>
+                    </div>
+                  )}
+                  {p.totalCost > 0 && (
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span>持倉總成本</span>
+                      <span className="text-slate-200 font-medium">{maskValue(formatMoney(p.totalCost, activeLedger.currency))}</span>
+                    </div>
+                  )}
+                  <div className="text-[11px] text-slate-400 pt-1 border-t border-white/5">
+                    請至交易明細或記帳彈窗記錄「賣出平倉」
                   </div>
                 </div>
               ))}
@@ -1018,11 +1161,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   <div className="flex items-center gap-3">
                     <div
                       className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
-                        isFutures
-                          ? isIncome
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                            : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                          : tx.type === 'stock_buy'
+                        tx.type === 'stock_buy'
                           ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
                           : tx.type === 'stock_sell'
                           ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
@@ -1033,9 +1172,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
                       }`}
                     >
-                      {isFutures ? (
-                        <Zap size={18} />
-                      ) : tx.type === 'stock_buy' ? (
+                      {tx.type === 'stock_buy' ? (
                         <TrendingUp size={18} />
                       ) : tx.type === 'stock_sell' ? (
                         <TrendingDown size={18} />
@@ -1054,13 +1191,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           {tx.category}
                         </span>
                         {tx.stockSymbol && (
-                          <span className="text-[11px] font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.2 rounded">
+                          <span
+                            className={`text-[11px] font-medium border px-1.5 py-0.2 rounded ${
+                              isFutures
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                            }`}
+                          >
                             {tx.stockSymbol}
                           </span>
                         )}
                         {tx.shares && (
                           <span className="text-[10px] text-slate-400">
-                            {tx.shares} 股 @ {tx.pricePerShare || ''}
+                            {tx.shares} {isFutures ? '口' : '股'} @ {tx.pricePerShare || ''}
                           </span>
                         )}
                       </div>

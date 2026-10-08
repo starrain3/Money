@@ -4,6 +4,7 @@ import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   STOCK_CATEGORIES,
+  FUTURES_TRADE_CATEGORIES,
   FUTURES_EXPENSE_CATEGORIES,
   FUTURES_INCOME_CATEGORIES,
   DEFAULT_ACCOUNTS,
@@ -69,6 +70,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [pricePerShare, setPricePerShare] = useState<string>('')
   const [fee, setFee] = useState<string>('20')
   const [tax, setTax] = useState<string>('0')
+  const [futuresMultiplier, setFuturesMultiplier] = useState<number>(1)
 
   // 自訂分類狀態
   const [customCategories, setCustomCategories] = useState<CategoryItem[]>(() => loadCustomCategories())
@@ -151,7 +153,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       const defaultType: TransactionType = isStockLedger
         ? 'stock_buy'
         : isFuturesLedger
-        ? 'income'
+        ? 'stock_buy'
         : 'expense'
       setType(defaultType)
       setAmount('')
@@ -184,7 +186,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setIsTaxUserModified(false)
       setCategory(
         isFuturesLedger
-          ? FUTURES_INCOME_CATEGORIES[0].name
+          ? FUTURES_TRADE_CATEGORIES[0].name
           : isStockLedger
           ? '股票買進'
           : EXPENSE_CATEGORIES[0].name
@@ -303,7 +305,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       // 期貨：統計各契約部位
       const contractsMap = new Map<
         string,
-        { symbol: string; buyLots: number; sellLots: number; count: number }
+        { symbol: string; buyLots: number; sellLots: number; totalCost: number; lastPrice?: number }
       >()
       ledgerTx.forEach((t) => {
         const sym = t.stockSymbol?.trim()
@@ -312,14 +314,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           symbol: sym,
           buyLots: 0,
           sellLots: 0,
-          count: 0,
+          totalCost: 0,
         }
-        existing.count += 1
         const lots = t.shares || 1
-        const isBuy = t.notes?.includes('買') || t.category.includes('買')
-        const isSell = t.notes?.includes('賣') || t.category.includes('賣')
+        const price = t.pricePerShare || 0
+        const isBuy = t.type === 'stock_buy' || t.notes?.includes('買') || t.category.includes('買')
+        const isSell = t.type === 'stock_sell' || t.notes?.includes('賣') || t.category.includes('賣')
         if (isBuy) {
           existing.buyLots += lots
+          if (price > 0) {
+            existing.lastPrice = price
+            existing.totalCost += lots * price
+          }
         } else if (isSell) {
           existing.sellLots += lots
         } else {
@@ -332,7 +338,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       contractsMap.forEach((c) => {
         const netLots = c.buyLots - c.sellLots
         if (netLots > 0) {
-          list.push({ symbol: c.symbol, remainingShares: netLots, avgPrice: 0 })
+          const avgPrice = c.buyLots > 0 && c.totalCost > 0
+            ? Math.round((c.totalCost / c.buyLots) * 100) / 100
+            : (c.lastPrice || 0)
+          list.push({ symbol: c.symbol, remainingShares: netLots, avgPrice })
         }
       })
 
@@ -441,15 +450,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
   }
 
-  // 期貨：輸入口數與每口金額時，自動依帳本手續費設定試算金額 (獲利扣手續費 / 虧損加手續費)
+  // 期貨：輸入口數與每口點數/單價時，自動依帳本手續費設定與乘數試算金額
   const handleFuturesSharesOrPriceChange = (
     newShares: string,
     newPrice: string,
-    currentFee?: string
+    currentFee?: string,
+    currentTax?: string,
+    multiplierOverride?: number
   ) => {
     const s = parseFloat(newShares) || 0
     const p = parseFloat(newPrice) || 0
     let f = currentFee !== undefined ? (parseFloat(currentFee) || 0) : (parseFloat(fee) || 0)
+    let t = currentTax !== undefined ? (parseFloat(currentTax) || 0) : (parseFloat(tax) || 0)
+    const mult = multiplierOverride !== undefined ? multiplierOverride : futuresMultiplier
 
     // 若手續費未手動修改過，自動依帳本手續費設定計算口數手續費
     if (!isFeeUserModified && currentFee === undefined) {
@@ -461,16 +474,55 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setFee(f.toString())
     }
 
+    // 若稅金未手動修改過，期交稅約為十萬分之二 (0.00002) 乘契約總值 (若 mult > 1)
+    if (!isTaxUserModified && currentTax === undefined && type === 'stock_sell') {
+      if (s > 0 && p > 0 && mult > 1) {
+        t = Math.round(s * p * mult * 0.00002)
+        setTax(t.toString())
+      }
+    }
+
     if (s > 0 && p > 0) {
       let total = 0
-      if (type === 'income') {
+      if (type === 'stock_buy') {
+        // 買進建倉
+        total = Math.round(s * p * mult + f)
+      } else if (type === 'stock_sell') {
+        // 賣出平倉
+        total = Math.round(s * p * mult - f - t)
+      } else if (type === 'income') {
         // 獲利入帳扣除手續費
-        total = Math.round(s * p - f > 0 ? s * p - f : s * p)
+        total = Math.round(s * p * mult - f > 0 ? s * p * mult - f : s * p * mult)
       } else {
         // 虧損扣款加上手續費
-        total = Math.round(s * p + f)
+        total = Math.round(s * p * mult + f)
       }
 
+      if (total > 0) {
+        setAmount(total.toString())
+      }
+    }
+  }
+
+  // 期貨手動觸發自動試算總額
+  const handleCalculateFuturesTotal = () => {
+    const s = parseFloat(shares) || 0
+    const p = parseFloat(pricePerShare) || 0
+    const f = parseFloat(fee) || 0
+    const t = parseFloat(tax) || 0
+    const mult = futuresMultiplier || 1
+
+    if (s > 0 && p > 0) {
+      let total = 0
+      if (type === 'stock_buy') {
+        total = Math.round(s * p * mult + f)
+      } else if (type === 'stock_sell') {
+        total = Math.round(s * p * mult - f - t)
+      } else if (type === 'income') {
+        total = Math.round(s * p * mult - f > 0 ? s * p * mult - f : s * p * mult)
+      } else {
+        total = Math.round(s * p * mult + f)
+      }
       if (total > 0) {
         setAmount(total.toString())
       }
@@ -481,7 +533,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const handleTypeChange = (newType: TransactionType) => {
     setType(newType)
     if (isFuturesLedger) {
-      if (newType === 'income') setCategory(FUTURES_INCOME_CATEGORIES[0].name)
+      if (newType === 'stock_buy') setCategory(FUTURES_TRADE_CATEGORIES[0].name)
+      else if (newType === 'stock_sell') setCategory(FUTURES_TRADE_CATEGORIES[1].name)
+      else if (newType === 'income') setCategory(FUTURES_INCOME_CATEGORIES[0].name)
       else setCategory(FUTURES_EXPENSE_CATEGORIES[0].name)
       return
     }
@@ -498,7 +552,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     let currentCatType: 'expense' | 'income' | 'stock' = 'expense'
 
     if (isFuturesLedger) {
-      if (type === 'income') {
+      if (type === 'stock_buy' || type === 'stock_sell') {
+        baseList = FUTURES_TRADE_CATEGORIES
+        currentCatType = 'stock'
+      } else if (type === 'income') {
         baseList = FUTURES_INCOME_CATEGORIES
         currentCatType = 'income'
       } else {
@@ -723,25 +780,47 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <>
                   <button
                     type="button"
-                    onClick={() => handleTypeChange('income')}
+                    onClick={() => handleTypeChange('stock_buy')}
                     className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                      type === 'income'
+                      type === 'stock_buy'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    📈 買進建倉
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeChange('stock_sell')}
+                    className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                      type === 'stock_sell'
                         ? 'bg-emerald-600 text-white shadow-md'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    ⚡ 平倉獲利 (入帳)
+                    📉 賣出平倉
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeChange('income')}
+                    className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                      type === 'income'
+                        ? 'bg-amber-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    ⚡ 其他收入
                   </button>
                   <button
                     type="button"
                     onClick={() => handleTypeChange('expense')}
-                    className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                    className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                       type === 'expense'
                         ? 'bg-rose-600 text-white shadow-md'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    ⚡ 平倉虧損 (扣款)
+                    ⚡ 其他費用
                   </button>
                 </>
               ) : (
@@ -877,8 +956,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           )}
 
-          {/* 若為股票帳本或股票類型，提供股票專屬欄位 */}
-          {(isStockLedger || type === 'stock_buy' || type === 'stock_sell' || type === 'dividend') && (
+          {/* 若為股票帳本或非期貨之股票類型，提供股票專屬欄位 */}
+          {!isFuturesLedger && (isStockLedger || type === 'stock_buy' || type === 'stock_sell' || type === 'dividend') && (
             <div className="p-3 bg-slate-800/40 border border-slate-700/60 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">
@@ -1071,16 +1150,28 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           )}
 
-          {/* 若為期貨帳本，提供期貨專屬契約與手續費欄位 */}
+          {/* 若為期貨帳本，提供期貨專屬契約與費用欄位 */}
           {isFuturesLedger && (
             <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
-                  ⚡ 期貨商品與費用明細
+                  ⚡ 期貨契約交易明細
                 </span>
-                <span className="text-[10px] text-amber-300/80 bg-amber-500/10 px-2 py-0.5 rounded" title={formatFeeConfigSummary(activeLedger.feeConfig, 'futures')}>
-                  {formatFeeConfigSummary(activeLedger.feeConfig, 'futures')} (可自行修改)
-                </span>
+                <div className="flex items-center gap-2">
+                  {(type === 'stock_buy' || type === 'stock_sell') && (
+                    <button
+                      type="button"
+                      onClick={handleCalculateFuturesTotal}
+                      className="text-[11px] text-amber-300 hover:text-amber-200 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 cursor-pointer"
+                    >
+                      <Calculator size={12} />
+                      自動試算總額
+                    </button>
+                  )}
+                  <span className="text-[10px] text-amber-300/80 bg-amber-500/10 px-2 py-0.5 rounded" title={formatFeeConfigSummary(activeLedger.feeConfig, 'futures')}>
+                    {formatFeeConfigSummary(activeLedger.feeConfig, 'futures')}
+                  </span>
+                </div>
               </div>
 
               {/* 未平倉部位 / 活躍契約快速選擇 */}
@@ -1091,6 +1182,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       <Package size={13} className="text-amber-400" />
                       ⚡ 未平倉部位 / 活躍契約 ({openHoldings.length}):
                     </span>
+                    {type === 'stock_sell' && (
+                      <span className="text-[10px] text-amber-300 font-medium">點選帶入未平倉口數與成本點位</span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto scrollbar-thin">
                     {openHoldings.map((h) => (
@@ -1099,9 +1193,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         type="button"
                         onClick={() => {
                           setStockSymbol(h.symbol)
-                          if (h.remainingShares > 0 && (!shares || parseFloat(shares) === 0)) {
+                          if (h.remainingShares > 0) {
                             setShares(h.remainingShares.toString())
-                            handleFuturesSharesOrPriceChange(h.remainingShares.toString(), pricePerShare)
+                            if (h.avgPrice > 0) {
+                              setPricePerShare(h.avgPrice.toString())
+                            }
+                            handleFuturesSharesOrPriceChange(
+                              h.remainingShares.toString(),
+                              h.avgPrice > 0 ? h.avgPrice.toString() : pricePerShare
+                            )
                           }
                         }}
                         className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -1114,6 +1214,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         {h.remainingShares > 0 && (
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">
                             {h.remainingShares}口未平倉
+                            {h.avgPrice > 0 ? ` @${h.avgPrice}` : ''}
                           </span>
                         )}
                       </button>
@@ -1127,15 +1228,34 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <input
                   type="text"
                   list="recent-futures-symbols-list"
-                  placeholder="例如：微型台指期貨、台指期貨 或 小台"
+                  placeholder="例如：微型臺指期貨、小型臺指、臺指期貨 或 個股期"
                   value={stockSymbol}
-                  onChange={(e) => setStockSymbol(e.target.value)}
+                  onChange={(e) => {
+                    setStockSymbol(e.target.value)
+                    const val = e.target.value
+                    if (val.includes('微')) {
+                      setFuturesMultiplier(10)
+                      handleFuturesSharesOrPriceChange(shares, pricePerShare, fee, tax, 10)
+                    } else if (val.includes('小台') || val.includes('小型')) {
+                      setFuturesMultiplier(50)
+                      handleFuturesSharesOrPriceChange(shares, pricePerShare, fee, tax, 50)
+                    } else if (val.includes('台指') || val.includes('大台')) {
+                      setFuturesMultiplier(200)
+                      handleFuturesSharesOrPriceChange(shares, pricePerShare, fee, tax, 200)
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
                 />
                 <datalist id="recent-futures-symbols-list">
                   {recentHistory.symbols.map((sym) => (
                     <option key={sym} value={sym} />
                   ))}
+                  <option value="微型臺指期貨" />
+                  <option value="小型臺指期貨" />
+                  <option value="臺指期貨" />
+                  <option value="電子期貨" />
+                  <option value="金融期貨" />
+                  <option value="小型電子期貨" />
                 </datalist>
 
                 {recentHistory.symbols.length > 0 && (
@@ -1147,7 +1267,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       <button
                         key={sym}
                         type="button"
-                        onClick={() => setStockSymbol(sym)}
+                        onClick={() => {
+                          setStockSymbol(sym)
+                          if (sym.includes('微')) {
+                            setFuturesMultiplier(10)
+                            handleFuturesSharesOrPriceChange(shares, pricePerShare, fee, tax, 10)
+                          } else if (sym.includes('小台') || sym.includes('小型')) {
+                            setFuturesMultiplier(50)
+                            handleFuturesSharesOrPriceChange(shares, pricePerShare, fee, tax, 50)
+                          } else if (sym.includes('台指') || sym.includes('大台')) {
+                            setFuturesMultiplier(200)
+                            handleFuturesSharesOrPriceChange(shares, pricePerShare, fee, tax, 200)
+                          }
+                        }}
                         className={`px-2 py-0.5 text-[11px] rounded-lg border transition-all cursor-pointer truncate max-w-[140px] ${
                           stockSymbol === sym
                             ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-medium'
@@ -1162,9 +1294,48 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 )}
               </div>
 
+              {/* 點數乘數選擇 */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] text-slate-400">契約乘數 (每點點值 / 模式)</label>
+                  <span className="text-[10px] text-amber-400 font-medium">
+                    {futuresMultiplier === 1
+                      ? '直接金額模式'
+                      : `每點 ${futuresMultiplier} 元`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { label: '直接金額/保證金', mult: 1 },
+                    { label: '微台 (10元/點)', mult: 10 },
+                    { label: '小台 (50元/點)', mult: 50 },
+                    { label: '大台 (200元/點)', mult: 200 },
+                  ].map((m) => (
+                    <button
+                      key={m.mult}
+                      type="button"
+                      onClick={() => {
+                        setFuturesMultiplier(m.mult)
+                        handleFuturesSharesOrPriceChange(shares, pricePerShare, fee, tax, m.mult)
+                      }}
+                      className={`py-1 px-1.5 text-[11px] rounded-lg border transition-all cursor-pointer truncate text-center ${
+                        futuresMultiplier === m.mult
+                          ? 'bg-amber-500/30 border-amber-400 text-amber-200 font-semibold shadow-sm'
+                          : 'bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-300'
+                      }`}
+                      title={m.label}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">平倉口數</label>
+                  <label className="block text-[11px] text-slate-400 mb-1">
+                    {type === 'stock_buy' ? '建倉口數' : type === 'stock_sell' ? '平倉口數' : '口數 (選填)'}
+                  </label>
                   <input
                     type="number"
                     step="any"
@@ -1178,11 +1349,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">每口金額 / 單價 (NT$)</label>
+                  <label className="block text-[11px] text-slate-400 mb-1">
+                    {futuresMultiplier > 1 ? '成交點數 (點)' : '每口金額 / 單價 (NT$)'}
+                  </label>
                   <input
                     type="number"
                     step="any"
-                    placeholder="如 1000 或 2500"
+                    placeholder={futuresMultiplier > 1 ? '如 22500' : '如 1000 或 2500'}
                     value={pricePerShare}
                     onChange={(e) => {
                       setPricePerShare(e.target.value)
@@ -1193,44 +1366,71 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] text-slate-400">
-                    期貨手續費
-                  </label>
-                  {isFeeUserModified ? (
-                    <button
-                      type="button"
-                      onClick={handleResetFeeToLedgerDefault}
-                      className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-0.5 cursor-pointer"
-                      title="恢復依帳本設定公式試算"
-                    >
-                      <RefreshCw size={10} />
-                      恢復帳本預設
-                    </button>
-                  ) : (
-                    <span className="text-[10px] text-amber-400 font-medium truncate max-w-[140px]" title={formatFeeConfigSummary(activeLedger.feeConfig, 'futures')}>
-                      {formatFeeConfigSummary(activeLedger.feeConfig, 'futures')}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] text-slate-400">
+                      期貨手續費
+                    </label>
+                    {isFeeUserModified ? (
+                      <button
+                        type="button"
+                        onClick={handleResetFeeToLedgerDefault}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-0.5 cursor-pointer"
+                        title="恢復依帳本設定公式試算"
+                      >
+                        <RefreshCw size={10} />
+                        恢復帳本預設
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-amber-400 font-medium truncate max-w-[120px]" title={formatFeeConfigSummary(activeLedger.feeConfig, 'futures')}>
+                        {formatFeeConfigSummary(activeLedger.feeConfig, 'futures')}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="可自行修改手續費"
+                    value={fee}
+                    onChange={(e) => {
+                      setFee(e.target.value)
+                      setIsFeeUserModified(true)
+                      handleFuturesSharesOrPriceChange(shares, pricePerShare, e.target.value, tax)
+                    }}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  />
+                  {isFeeUserModified && (
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      ✎ 已自行修改手續費
                     </span>
                   )}
                 </div>
-                <input
-                  type="number"
-                  step="any"
-                  placeholder="可自行修改手續費"
-                  value={fee}
-                  onChange={(e) => {
-                    setFee(e.target.value)
-                    setIsFeeUserModified(true)
-                    handleFuturesSharesOrPriceChange(shares, pricePerShare, e.target.value)
-                  }}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
-                />
-                {isFeeUserModified && (
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    ✎ 已自行修改手續費
-                  </span>
-                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] text-slate-400">
+                      期貨交易稅 (期交稅)
+                    </label>
+                  </div>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="期交稅 (十萬分之二)"
+                    value={tax}
+                    onChange={(e) => {
+                      setTax(e.target.value)
+                      setIsTaxUserModified(true)
+                      handleFuturesSharesOrPriceChange(shares, pricePerShare, fee, e.target.value)
+                    }}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500"
+                  />
+                  {isTaxUserModified && (
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      ✎ 已自行修改期交稅
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           )}

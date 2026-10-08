@@ -28,6 +28,13 @@ export const STOCK_CATEGORIES: CategoryItem[] = [
   { id: 'stk_fee', name: '交易稅費', type: 'stock', icon: 'Receipt', color: '#ef4444' },
 ]
 
+export const FUTURES_TRADE_CATEGORIES: CategoryItem[] = [
+  { id: 'fut_buy_open', name: '買進建倉', type: 'stock', icon: 'ArrowDownRight', color: '#3b82f6' },
+  { id: 'fut_sell_close', name: '賣出平倉', type: 'stock', icon: 'ArrowUpRight', color: '#10b981' },
+  { id: 'fut_sell_open', name: '賣出建倉', type: 'stock', icon: 'ArrowUpRight', color: '#f59e0b' },
+  { id: 'fut_buy_close', name: '買進平倉', type: 'stock', icon: 'ArrowDownRight', color: '#06b6d4' },
+]
+
 export const FUTURES_EXPENSE_CATEGORIES: CategoryItem[] = [
   { id: 'fut_loss', name: '平倉虧損', type: 'expense', icon: 'TrendingDown', color: '#ef4444' },
   { id: 'fut_fee', name: '期貨手續費', type: 'expense', icon: 'Receipt', color: '#f59e0b' },

@@ -603,7 +603,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                             )}
                             {tx.shares && (
                               <span className="text-[10px] text-slate-400">
-                                {tx.shares} 股
+                                {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'}
                               </span>
                             )}
                           </div>
@@ -898,7 +898,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                   )}
                                   {tx.shares && (
                                     <span className="text-[10px] text-slate-400">
-                                      {tx.shares} 股 @ {tx.pricePerShare || ''}
+                                      {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'} @ {tx.pricePerShare || ''}
                                     </span>
                                   )}
                                 </div>
