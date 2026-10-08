@@ -560,74 +560,77 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                     <div
                       key={tx.id}
                       onClick={() => onSelectTransaction(tx)}
-                      className="py-3 px-1 hover:bg-slate-800/40 rounded-xl transition-colors flex items-center justify-between cursor-pointer group"
+                      className="py-3 px-1.5 hover:bg-slate-800/40 rounded-xl transition-colors cursor-pointer group"
                     >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                            tx.type === 'stock_buy'
-                              ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                              : tx.type === 'stock_sell'
-                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                              : tx.type === 'dividend'
-                              ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                              : tx.type === 'income'
-                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                          }`}
-                        >
-                          {tx.type === 'stock_buy' && <TrendingUp size={16} />}
-                          {tx.type === 'stock_sell' && <TrendingDown size={16} />}
-                          {tx.type === 'dividend' && <Coins size={16} />}
-                          {tx.type === 'income' && <TrendingUp size={16} />}
-                          {tx.type === 'expense' && <TrendingDown size={16} />}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                              tx.type === 'stock_buy'
+                                ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                : tx.type === 'stock_sell'
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                : tx.type === 'dividend'
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                                : tx.type === 'income'
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                            }`}
+                          >
+                            {tx.type === 'stock_buy' && <TrendingUp size={16} />}
+                            {tx.type === 'stock_sell' && <TrendingDown size={16} />}
+                            {tx.type === 'dividend' && <Coins size={16} />}
+                            {tx.type === 'income' && <TrendingUp size={16} />}
+                            {tx.type === 'expense' && <TrendingDown size={16} />}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                                {tx.category}
+                              </span>
+                              {tx.stockSymbol && (
+                                <span
+                                  className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
+                                    activeLedger.type === 'futures'
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                      : activeLedger.type === 'stock'
+                                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                  }`}
+                                >
+                                  {tx.stockSymbol}
+                                </span>
+                              )}
+                              {tx.shares && (
+                                <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
+                                  {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 truncate">
+                              {tx.time && <span className="shrink-0">{tx.time}</span>}
+                              <span className="shrink-0">• {tx.account}</span>
+                            </div>
+                          </div>
                         </div>
 
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors">
-                              {tx.category}
-                            </span>
-                            {tx.stockSymbol && (
-                              <span
-                                className={`text-[11px] font-medium border px-1.5 py-0.2 rounded ${
-                                  activeLedger.type === 'futures'
-                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                    : activeLedger.type === 'stock'
-                                    ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                }`}
-                              >
-                                {tx.stockSymbol}
-                              </span>
-                            )}
-                            {tx.shares && (
-                              <span className="text-[10px] text-slate-400">
-                                {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                            {tx.time && <span>{tx.time}</span>}
-                            <span>• {tx.account}</span>
-                            {tx.notes && (
-                              <span className="truncate max-w-[130px] text-slate-300">
-                                ({tx.notes})
-                              </span>
-                            )}
+                        <div className="text-right shrink-0 whitespace-nowrap">
+                          <div
+                            className={`text-xs sm:text-sm font-bold tracking-tight whitespace-nowrap ${
+                              isIncome ? 'text-emerald-400' : 'text-rose-400'
+                            }`}
+                          >
+                            {isIncome ? '+' : '-'} {maskValue(formatMoney(tx.amount, activeLedger.currency))}
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0 whitespace-nowrap">
-                        <div
-                          className={`text-xs sm:text-sm font-bold tracking-tight whitespace-nowrap ${
-                            isIncome ? 'text-emerald-400' : 'text-rose-400'
-                          }`}
-                        >
-                          {isIncome ? '+' : '-'} {maskValue(formatMoney(tx.amount, activeLedger.currency))}
+                      {tx.notes && (
+                        <div className="mt-1 pl-12 text-[11px] text-slate-400/90 break-words">
+                          {tx.notes}
                         </div>
-                      </div>
+                      )}
                     </div>
                   )
                 })}
@@ -855,75 +858,78 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           <div
                             key={tx.id}
                             onClick={() => onSelectTransaction(tx)}
-                            className="p-3.5 hover:bg-slate-800/40 transition-colors flex items-center justify-between cursor-pointer group gap-2"
+                            className="p-3.5 hover:bg-slate-800/40 transition-colors cursor-pointer group"
                           >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div
-                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
-                                  tx.type === 'stock_buy'
-                                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                                    : tx.type === 'stock_sell'
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                    : tx.type === 'dividend'
-                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                                    : tx.type === 'income'
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                    : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                                }`}
-                              >
-                                {tx.type === 'stock_buy' && <TrendingUp size={18} />}
-                                {tx.type === 'stock_sell' && <TrendingDown size={18} />}
-                                {tx.type === 'dividend' && <Coins size={18} />}
-                                {tx.type === 'income' && <TrendingUp size={18} />}
-                                {tx.type === 'expense' && <TrendingDown size={18} />}
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
-                                    {tx.category}
-                                  </span>
-                                  {tx.stockSymbol && (
-                                    <span
-                                      className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
-                                        activeLedger.type === 'futures'
-                                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                          : activeLedger.type === 'stock'
-                                          ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                      }`}
-                                    >
-                                      {tx.stockSymbol}
-                                    </span>
-                                  )}
-                                  {tx.shares && (
-                                    <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
-                                      {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'} @ {tx.pricePerShare || ''}
-                                    </span>
-                                  )}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div
+                                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                                    tx.type === 'stock_buy'
+                                      ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                      : tx.type === 'stock_sell'
+                                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                      : tx.type === 'dividend'
+                                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                                      : tx.type === 'income'
+                                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                      : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                                  }`}
+                                >
+                                  {tx.type === 'stock_buy' && <TrendingUp size={18} />}
+                                  {tx.type === 'stock_sell' && <TrendingDown size={18} />}
+                                  {tx.type === 'dividend' && <Coins size={18} />}
+                                  {tx.type === 'income' && <TrendingUp size={18} />}
+                                  {tx.type === 'expense' && <TrendingDown size={18} />}
                                 </div>
 
-                                <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 truncate">
-                                  {tx.time && <span className="shrink-0">{tx.time}</span>}
-                                  <span className="shrink-0">• {tx.account}</span>
-                                  {tx.notes && (
-                                    <span className="truncate max-w-[140px] text-slate-300">
-                                      ({tx.notes})
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                                      {tx.category}
                                     </span>
-                                  )}
+                                    {tx.stockSymbol && (
+                                      <span
+                                        className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
+                                          activeLedger.type === 'futures'
+                                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                            : activeLedger.type === 'stock'
+                                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                        }`}
+                                      >
+                                        {tx.stockSymbol}
+                                      </span>
+                                    )}
+                                    {tx.shares && (
+                                      <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
+                                        {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'} @ {tx.pricePerShare || ''}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 truncate">
+                                    {tx.time && <span className="shrink-0">{tx.time}</span>}
+                                    <span className="shrink-0">• {tx.account}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0 whitespace-nowrap">
+                                <div
+                                  className={`text-xs sm:text-sm font-bold tracking-tight whitespace-nowrap ${
+                                isIncome ? 'text-emerald-400' : 'text-rose-400'
+                              }`}
+                                >
+                                  {isIncome ? '+' : '-'} {maskValue(formatMoney(tx.amount, activeLedger.currency))}
                                 </div>
                               </div>
                             </div>
 
-                            <div className="text-right shrink-0 whitespace-nowrap">
-                              <div
-                                className={`text-xs sm:text-sm font-bold tracking-tight whitespace-nowrap ${
-                              isIncome ? 'text-emerald-400' : 'text-rose-400'
-                            }`}
-                              >
-                                {isIncome ? '+' : '-'} {maskValue(formatMoney(tx.amount, activeLedger.currency))}
+                            {tx.notes && (
+                              <div className="mt-1 pl-[52px] text-[11px] text-slate-400/90 break-words">
+                                {tx.notes}
                               </div>
-                            </div>
+                            )}
                           </div>
                         )
                       })}
