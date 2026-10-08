@@ -619,9 +619,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="text-right">
+                      <div className="text-right shrink-0 whitespace-nowrap">
                         <div
-                          className={`text-sm font-bold tracking-tight ${
+                          className={`text-xs sm:text-sm font-bold tracking-tight whitespace-nowrap ${
                             isIncome ? 'text-emerald-400' : 'text-rose-400'
                           }`}
                         >
@@ -739,9 +739,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           </div>
 
           {/* 明細統計總金額卡片 (正負相加總金額) */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center justify-between">
-            <div>
-              <div className="text-xs text-slate-400 font-medium mb-1">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-slate-400 font-medium mb-0.5 sm:mb-1 truncate">
                 {selectedMonth ? `${selectedMonth} ` : '全部'}
                 {activeLedger.type === 'futures'
                   ? '淨損益 (總金額)'
@@ -749,7 +749,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                   ? '淨額 (總金額)'
                   : '收支總金額 (結餘)'}
               </div>
-              <div className="text-2xl font-extrabold tracking-tight flex items-baseline gap-1">
+              <div className="text-lg sm:text-xl md:text-2xl font-extrabold tracking-tight flex items-baseline gap-1 whitespace-nowrap">
                 <span
                   className={
                     filterSummary.netTotal > 0
@@ -765,14 +765,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               </div>
             </div>
 
-            <div className="text-right text-xs space-y-0.5">
-              <div className="text-emerald-400 font-medium">
+            <div className="text-right text-[11px] sm:text-xs space-y-0.5 shrink-0 whitespace-nowrap">
+              <div className="text-emerald-400 font-medium whitespace-nowrap">
                 +{maskValue(formatMoney(filterSummary.totalIncome, activeLedger.currency))}
               </div>
-              <div className="text-rose-400 font-medium">
+              <div className="text-rose-400 font-medium whitespace-nowrap">
                 -{maskValue(formatMoney(filterSummary.totalExpense, activeLedger.currency))}
               </div>
-              <div className="text-[11px] text-slate-500">
+              <div className="text-[10px] sm:text-[11px] text-slate-500 whitespace-nowrap">
                 共 {filterSummary.count} 筆記錄
               </div>
             </div>
@@ -815,13 +815,13 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                     className="bg-slate-900/70 border border-slate-800/80 rounded-2xl overflow-hidden shadow-lg"
                   >
                     {/* 日期標題列與當日總金額 (正的跟負的加起來) */}
-                    <div className="px-4 py-2.5 bg-slate-850 border-b border-slate-800/80 flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-200">
+                    <div className="px-3.5 sm:px-4 py-2.5 bg-slate-850 border-b border-slate-800/80 flex items-center justify-between text-xs gap-2">
+                      <span className="font-semibold text-slate-200 shrink-0 whitespace-nowrap">
                         {formatDateTaiwan(dateStr)}
                       </span>
-                      <div className="flex items-center gap-2.5 text-xs">
-                        <div className="flex items-center gap-1 font-semibold">
-                          <span className="text-[11px] text-slate-400 font-normal">總金額:</span>
+                      <div className="flex items-center gap-2 sm:gap-2.5 text-xs shrink-0 whitespace-nowrap">
+                        <div className="flex items-center gap-1 font-semibold whitespace-nowrap">
+                          <span className="text-[10px] sm:text-[11px] text-slate-400 font-normal">總金額:</span>
                           <span
                             className={
                               dayNet > 0
@@ -836,7 +836,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           </span>
                         </div>
                         {dayIncome > 0 && dayExpense > 0 && (
-                          <div className="hidden sm:flex items-center gap-1 text-[11px] text-slate-400">
+                          <div className="hidden sm:flex items-center gap-1 text-[11px] text-slate-400 whitespace-nowrap">
                             <span className="text-emerald-400/80">+{formatCompactAmount(dayIncome)}</span>
                             <span>/</span>
                             <span className="text-rose-400/80">-{formatCompactAmount(dayExpense)}</span>
@@ -855,9 +855,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           <div
                             key={tx.id}
                             onClick={() => onSelectTransaction(tx)}
-                            className="p-3.5 hover:bg-slate-800/40 transition-colors flex items-center justify-between cursor-pointer group"
+                            className="p-3.5 hover:bg-slate-800/40 transition-colors flex items-center justify-between cursor-pointer group gap-2"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
                               <div
                                 className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
                                   tx.type === 'stock_buy'
@@ -878,14 +878,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                 {tx.type === 'expense' && <TrendingDown size={18} />}
                               </div>
 
-                              <div>
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors">
+                                  <span className="font-semibold text-sm text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
                                     {tx.category}
                                   </span>
                                   {tx.stockSymbol && (
                                     <span
-                                      className={`text-[11px] font-medium border px-1.5 py-0.2 rounded ${
+                                      className={`text-[11px] font-medium border px-1.5 py-0.2 rounded shrink-0 whitespace-nowrap ${
                                         activeLedger.type === 'futures'
                                           ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                                           : activeLedger.type === 'stock'
@@ -897,15 +897,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                     </span>
                                   )}
                                   {tx.shares && (
-                                    <span className="text-[10px] text-slate-400">
+                                    <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
                                       {tx.shares} {activeLedger.type === 'futures' ? '口' : '股'} @ {tx.pricePerShare || ''}
                                     </span>
                                   )}
                                 </div>
 
-                                <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                                  {tx.time && <span>{tx.time}</span>}
-                                  <span>• {tx.account}</span>
+                                <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 truncate">
+                                  {tx.time && <span className="shrink-0">{tx.time}</span>}
+                                  <span className="shrink-0">• {tx.account}</span>
                                   {tx.notes && (
                                     <span className="truncate max-w-[140px] text-slate-300">
                                       ({tx.notes})
@@ -915,9 +915,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                               </div>
                             </div>
 
-                            <div className="text-right">
+                            <div className="text-right shrink-0 whitespace-nowrap">
                               <div
-                                className={`text-sm font-bold tracking-tight ${
+                                className={`text-xs sm:text-sm font-bold tracking-tight whitespace-nowrap ${
                               isIncome ? 'text-emerald-400' : 'text-rose-400'
                             }`}
                               >
