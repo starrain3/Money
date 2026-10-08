@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import type { Ledger, Transaction } from '../types'
 import { DynamicIcon } from './DynamicIcon'
+import { useNotification } from '../context/NotificationContext'
 import { X, ArrowRight, Merge, AlertTriangle } from 'lucide-react'
 
 interface MergeLedgersModalProps {
@@ -18,6 +19,7 @@ export const MergeLedgersModal: React.FC<MergeLedgersModalProps> = ({
   transactions,
   onMerge,
 }) => {
+  const { showToast, showConfirm } = useNotification()
   const [sourceId, setSourceId] = useState<string>('')
   const [targetId, setTargetId] = useState<string>('')
   const [deleteSource, setDeleteSource] = useState<boolean>(true)
@@ -53,22 +55,28 @@ export const MergeLedgersModal: React.FC<MergeLedgersModalProps> = ({
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!sourceId || !targetId) {
-      alert('請選擇來源帳本與目標帳本！')
+      showToast('請選擇來源帳本與目標帳本！', 'warning')
       return
     }
     if (sourceId === targetId) {
-      alert('來源帳本與目標帳本不能相同！')
+      showToast('來源帳本與目標帳本不能相同！', 'warning')
       return
     }
 
     const confirmMsg = `確認將【${sourceLedger?.name}】的 ${sourceTxCount} 筆記錄合併到【${targetLedger?.name}】嗎？${
-      deleteSource ? '\n合併完成後將會刪除來源帳本【' + sourceLedger?.name + '】。' : ''
+      deleteSource ? '\n\n注意：合併完成後將會刪除來源帳本【' + sourceLedger?.name + '】。' : ''
     }`
 
-    if (confirm(confirmMsg)) {
+    const confirmed = await showConfirm(confirmMsg, {
+      title: '確認合併帳本',
+      type: deleteSource ? 'danger' : 'warning',
+      confirmText: '確定合併',
+    })
+
+    if (confirmed) {
       onMerge(sourceId, targetId, deleteSource)
       onClose()
     }

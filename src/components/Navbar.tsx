@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import type { Ledger } from '../types'
 import { DynamicIcon } from './DynamicIcon'
-import { ChevronDown, Plus, Eye, EyeOff, WifiOff } from 'lucide-react'
+import { ChevronDown, Plus, Eye, EyeOff, WifiOff, Bell } from 'lucide-react'
 
 interface NavbarProps {
   ledgers: Ledger[]
@@ -13,6 +13,8 @@ interface NavbarProps {
   currentVersion?: string
   hasUpdate?: boolean
   onOpenVersionModal?: () => void
+  onOpenReminderModal?: () => void
+  hasActiveReminders?: boolean
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -25,6 +27,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentVersion,
   hasUpdate,
   onOpenVersionModal,
+  onOpenReminderModal,
+  hasActiveReminders = false,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -182,6 +186,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               <WifiOff size={13} />
               <span className="text-[10px] hidden sm:inline">離線模式</span>
             </div>
+          )}
+
+          {onOpenReminderModal && (
+            <button
+              onClick={onOpenReminderModal}
+              className="relative p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
+              title="定時提醒設定"
+              aria-label="定時提醒設定"
+            >
+              <Bell size={18} />
+              {hasActiveReminders && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 absolute top-1.5 right-1.5 shadow-sm shadow-amber-400" />
+              )}
+            </button>
           )}
 
           <button

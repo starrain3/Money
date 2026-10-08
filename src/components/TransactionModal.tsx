@@ -16,6 +16,7 @@ import {
 import { calculateFee, formatFeeConfigSummary } from '../utils/fee'
 import { DynamicIcon } from './DynamicIcon'
 import { CategoryManagerModal } from './CategoryManagerModal'
+import { useNotification } from '../context/NotificationContext'
 import { X, Calendar, Clock, Calculator, Trash2, Plus, Check, History, RotateCcw, Package, RefreshCw, SlidersHorizontal, Wallet } from 'lucide-react'
 
 const AVAILABLE_ICONS = [
@@ -50,6 +51,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   defaultDate,
   existingTransactions = [],
 }) => {
+  const { showToast, showConfirm } = useNotification()
   const isStockLedger = activeLedger.type === 'stock'
   const isFuturesLedger = activeLedger.type === 'futures'
 
@@ -575,12 +577,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     if (e) e.preventDefault()
     const trimmed = newCatName.trim()
     if (!trimmed) {
-      alert('請輸入分類名稱！')
+      showToast('請輸入分類名稱！', 'warning')
       return
     }
 
     if (categoryOptions.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
-      alert('此分類名稱已存在！')
+      showToast('此分類名稱已存在！', 'warning')
       return
     }
 
@@ -605,6 +607,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setNewCatName('')
     setIsAddingCategory(false)
     setCategoryRefreshKey((prev) => prev + 1)
+    showToast(`已新增分類「${newCategoryItem.name}」`, 'success')
   }
 
   // 處理新增自訂錢包至當前帳本 (分開記錄於 localStorage)
@@ -616,14 +619,24 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setAccount(trimmed)
     setNewAccountInput('')
     setIsAddingCustomAccount(false)
+    showToast(`已新增常用錢包「${trimmed}」`, 'success')
   }
 
   // 處理重設當前帳本的常用錢包清單
-  const handleResetAccounts = () => {
-    if (window.confirm(`確定要將「${activeLedger.name}」的常用錢包清單恢復為系統預設值嗎？`)) {
+  const handleResetAccounts = async () => {
+    const confirmed = await showConfirm(
+      `確定要將「${activeLedger.name}」的常用錢包清單恢復為系統預設值嗎？`,
+      {
+        title: '重設常用錢包',
+        type: 'warning',
+        confirmText: '確定重設',
+      }
+    )
+    if (confirmed) {
       const defaults = resetLedgerAccounts(activeLedger.id, activeLedger.type)
       setLedgerAccounts(defaults)
       setAccount(defaults[0] || '')
+      showToast('已恢復預設常用錢包', 'info')
     }
   }
 
@@ -631,7 +644,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const handleRemoveAccount = (e: React.MouseEvent, accToRemove: string) => {
     e.stopPropagation()
     if (ledgerAccounts.length <= 1) {
-      alert('請至少保留一個常用錢包！')
+      showToast('請至少保留一個常用錢包！', 'warning')
       return
     }
     const filtered = ledgerAccounts.filter((a) => a !== accToRemove)
@@ -640,6 +653,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     if (account === accToRemove) {
       setAccount(filtered[0])
     }
+    showToast(`已自常用清單移除「${accToRemove}」`, 'info')
   }
 
   // 股票自動計算總金額：股數 × 單價 + 手續費 (+ 稅)
@@ -666,12 +680,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     e.preventDefault()
     const numAmount = parseFloat(amount)
     if (isNaN(numAmount) || numAmount <= 0) {
-      alert('請輸入有效的金額！')
+      showToast('請輸入有效的金額！', 'warning')
       return
     }
 
     if (!category) {
-      alert('請選擇或輸入分類！')
+      showToast('請選擇或輸入分類！', 'warning')
       return
     }
 
@@ -1841,10 +1855,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {editTransaction && onDelete && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm('確定要刪除這筆記帳記錄嗎？')) {
+                onClick={async () => {
+                  const confirmed = await showConfirm('確定要刪除這筆記帳記錄嗎？', {
+                    title: '刪除記帳',
+                    type: 'danger',
+                    confirmText: '確定刪除',
+                  })
+                  if (confirmed) {
                     onDelete(editTransaction.id)
                     onClose()
+                    showToast('已刪除記帳記錄', 'info')
                   }
                 }}
                 className="px-4 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30 transition-colors flex items-center justify-center cursor-pointer"

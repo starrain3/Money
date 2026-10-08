@@ -61,3 +61,19 @@ export interface StorageData {
   activeLedgerId: string
 }
 
+export type ReminderFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
+
+export interface ReminderItem {
+  id: string
+  title: string
+  message: string
+  frequency: ReminderFrequency
+  time: string // 'HH:mm', 例如 '21:00'
+  dayOfWeek?: number // 0 (週日) - 6 (週六), weekly 使用
+  dayOfMonth?: number // 1 - 31, monthly 與 yearly 使用
+  monthOfYear?: number // 1 - 12, yearly 使用
+  enabled: boolean
+  lastTriggeredDate?: string // 防止同一週期重複觸發
+  createdAt: string
+}
+

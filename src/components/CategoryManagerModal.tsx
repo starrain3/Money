@@ -9,6 +9,7 @@ import {
 } from '../utils/categoryStorage'
 import { CATEGORY_ICONS, CATEGORY_COLORS } from '../constants/categories'
 import { DynamicIcon } from './DynamicIcon'
+import { useNotification } from '../context/NotificationContext'
 import {
   X,
   Plus,
@@ -35,6 +36,8 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
   initialGroupKey = 'expense',
   onCategoriesChanged,
 }) => {
+  const { showToast, showConfirm } = useNotification()
+
   // 目前選取的分類大類（一般收支 / 股票投資 / 期貨交易）
   const [parentType, setParentType] = useState<'standard' | 'stock' | 'futures'>('standard')
   // 目前選取的子群組
@@ -176,18 +179,24 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
   }
 
   // 刪除分類
-  const handleDeleteItem = (item: CategoryItem) => {
+  const handleDeleteItem = async (item: CategoryItem) => {
     if (items.length <= 1) {
-      alert('請至少保留一個分類項目！')
+      showToast('請至少保留一個分類項目！', 'warning')
       return
     }
-    const confirmed = confirm(
-      `確定要刪除「${item.name}」分類嗎？\n\n注意：此操作僅會從選項中移除，既有的歷史記帳記錄不會受到影響。`
+    const confirmed = await showConfirm(
+      `確定要刪除「${item.name}」分類嗎？\n\n注意：此操作僅會從選項中移除，既有的歷史記帳記錄不會受到影響。`,
+      {
+        title: '刪除分類確認',
+        type: 'danger',
+        confirmText: '確定刪除',
+      }
     )
     if (!confirmed) return
 
     const filtered = items.filter((i) => i.id !== item.id)
     persistItems(filtered)
+    showToast(`已刪除「${item.name}」分類`, 'info')
 
     if (editingId === item.id) {
       handleCancelForm()
@@ -235,15 +244,21 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
   }
 
   // 重設為系統預設值
-  const handleResetToDefault = () => {
-    const confirmed = confirm(
-      `確定要將「${currentGroupInfo?.label || ''}」恢復為系統預設分類嗎？\n\n自訂的排列與項目將會被重設。`
+  const handleResetToDefault = async () => {
+    const confirmed = await showConfirm(
+      `確定要將「${currentGroupInfo?.label || ''}」恢復為系統預設分類嗎？\n\n自訂的排列與項目將會被重設。`,
+      {
+        title: '恢復預設分類',
+        type: 'warning',
+        confirmText: '確定重設',
+      }
     )
     if (!confirmed) return
     const restored = resetCategories(activeGroupKey)
     setItems(restored)
     onCategoriesChanged?.()
     handleCancelForm()
+    showToast(`已將「${currentGroupInfo?.label || ''}」恢復為預設分類`, 'success')
   }
 
   return (

@@ -31,9 +31,12 @@ import {
   Clock,
   CheckCircle2,
   SlidersHorizontal,
+  Bell,
+  BellRing,
 } from 'lucide-react'
 import { MergeLedgersModal } from './MergeLedgersModal'
 import { CategoryManagerModal } from './CategoryManagerModal'
+import { useNotification } from '../context/NotificationContext'
 
 interface LedgersViewProps {
   ledgers: Ledger[]
@@ -55,6 +58,7 @@ interface LedgersViewProps {
   isUpdatingVersion?: boolean
   onCheckUpdate?: () => void
   onForceUpdate?: () => void
+  onOpenReminderModal?: () => void
 }
 
 export const LedgersView: React.FC<LedgersViewProps> = ({
@@ -77,7 +81,9 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
   isUpdatingVersion = false,
   onCheckUpdate,
   onForceUpdate,
+  onOpenReminderModal,
 }) => {
+  const { showToast, showAlert, showConfirm } = useNotification()
   const jsonFileInputRef = useRef<HTMLInputElement>(null)
   const csvFileInputRef = useRef<HTMLInputElement>(null)
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
@@ -93,12 +99,20 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
 
     try {
       const data = await importDataFromJSON(file)
-      if (confirm(`確認匯入？這將會覆蓋現有資料（包含 ${data.ledgers.length} 個帳本與 ${data.transactions.length} 筆明細）。`)) {
+      const confirmed = await showConfirm(
+        `確認匯入？這將會覆蓋現有資料（包含 ${data.ledgers.length} 個帳本與 ${data.transactions.length} 筆明細）。`,
+        {
+          title: '匯入備份資料',
+          type: 'danger',
+          confirmText: '確定覆蓋並匯入',
+        }
+      )
+      if (confirmed) {
         onRestoreData(data)
-        alert('備份資料匯入成功！')
+        showToast('備份資料匯入成功！', 'success')
       }
     } catch (err: unknown) {
-      alert(`匯入失敗：${err instanceof Error ? err.message : '未知錯誤'}`)
+      showToast(`匯入失敗：${err instanceof Error ? err.message : '未知錯誤'}`, 'error')
     } finally {
       if (jsonFileInputRef.current) {
         jsonFileInputRef.current.value = ''
@@ -115,7 +129,10 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
       const result = await parseExcelOrCSVFile(file, activeLedgerId, ledgers)
 
       if (result.successCount === 0) {
-        alert('無法從檔案中讀取到有效的記帳資料，請檢查檔案內容或格式。')
+        showAlert('無法從檔案中讀取到有效的記帳資料，請檢查檔案內容或格式。', {
+          title: '讀取失敗',
+          type: 'warning',
+        })
         return
       }
 
@@ -144,9 +161,13 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
         detailsMsg = `\n- 包含：買進 ${result.buyCount || 0} 筆、賣出 ${result.sellCount || 0} 筆`
       }
 
-      const confirmMsg = `🎉 成功解析出 ${result.successCount} 筆明細 (${typeDesc})！${detailsMsg}\n\n系統已預設為您建立新專屬帳本：【${result.targetLedgerName}】。\n\n點擊「確定」立即建立帳本並匯入資料；\n點擊「取消」則中止匯入。`
+      const confirmMsg = `🎉 成功解析出 ${result.successCount} 筆明細 (${typeDesc})！${detailsMsg}\n\n系統已預設為您建立新專屬帳本：【${result.targetLedgerName}】。\n\n點擊「立即建立並匯入」將建立帳本並載入資料；\n點擊「取消」則中止匯入。`
 
-      const shouldCreateAndImport = confirm(confirmMsg)
+      const shouldCreateAndImport = await showConfirm(confirmMsg, {
+        title: '解析完成，確認建立帳本',
+        type: 'info',
+        confirmText: '立即建立並匯入',
+      })
 
       if (shouldCreateAndImport) {
         const newLedger: Ledger = {
@@ -174,10 +195,13 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
           activeLedgerId: newLedgerId, // 自動切換至新建立的帳本
         })
 
-        alert(`🎉 已成功為您建立帳本【${result.targetLedgerName}】，並匯入 ${result.successCount} 筆明細！`)
+        showToast(`🎉 已成功為您建立帳本【${result.targetLedgerName}】，並匯入 ${result.successCount} 筆明細！`, 'success')
       }
     } catch (err: unknown) {
-      alert(`檔案匯入失敗：${err instanceof Error ? err.message : '未知錯誤'}`)
+      showAlert(`檔案匯入失敗：${err instanceof Error ? err.message : '未知錯誤'}`, {
+        title: '匯入失敗',
+        type: 'error',
+      })
     } finally {
       if (csvFileInputRef.current) {
         csvFileInputRef.current.value = ''
@@ -213,19 +237,27 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
       activeLedgerId: nextActiveId,
     })
 
-    alert(`🎉 成功將【${sourceLedger?.name}】的 ${count} 筆明細全部合併至【${targetLedger?.name}】！`)
+    showToast(`🎉 成功將【${sourceLedger?.name}】的 ${count} 筆明細全部合併至【${targetLedger?.name}】！`, 'success')
   }
 
   // 清空所有明細資料 (清空所有記帳，保留帳本設定)
-  const handleClearAllTransactions = () => {
-    if (confirm('確定要清空所有記帳記錄嗎？\n您的帳本設定將會完整保留，帳目清空後即可開始全新的個人記帳！')) {
+  const handleClearAllTransactions = async () => {
+    const confirmed = await showConfirm(
+      '確定要清空所有記帳記錄嗎？\n\n您的帳本設定將會完整保留，帳目清空後即可開始全新的個人記帳！',
+      {
+        title: '清空所有記錄',
+        type: 'danger',
+        confirmText: '確定清空',
+      }
+    )
+    if (confirmed) {
       onRestoreData({
         version: 1,
         ledgers,
         transactions: [],
         activeLedgerId,
       })
-      alert('已成功清空所有記帳資料！')
+      showToast('已成功清空所有記帳資料！', 'success')
     }
   }
 
@@ -437,14 +469,20 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation()
                         const confirmMsg =
                           ledgers.length <= 1
                             ? `「${ledger.name}」是您目前唯一的帳本。刪除後將清除所有記錄，並自動為您建立一個全新的空白「日常開銷」帳本，確定要刪除嗎？`
                             : `確定要刪除「${ledger.name}」帳本及其所有 ${ledgerTransactions.length} 筆記帳記錄嗎？此動作無法復原。`
-                        if (confirm(confirmMsg)) {
+                        const confirmed = await showConfirm(confirmMsg, {
+                          title: '刪除帳本確認',
+                          type: 'danger',
+                          confirmText: '確定刪除',
+                        })
+                        if (confirmed) {
                           onDeleteLedger(ledger.id)
+                          showToast(`已刪除帳本「${ledger.name}」`, 'info')
                         }
                       }}
                       className="p-1.5 bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
@@ -522,6 +560,31 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
             <SlidersHorizontal size={14} />
             開啟分類管理面板
           </button>
+        </div>
+      </div>
+
+      {/* 定時提醒通知設定 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-slate-100 text-sm flex items-center gap-2">
+              <BellRing size={17} className="text-amber-400" />
+              定時提醒通知設定 (每天 / 每週 / 每年)
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              自訂每天固定記帳提醒、每週支出回顧、每月固定扣款或年度保費/稅務結算備忘。
+            </p>
+          </div>
+          {onOpenReminderModal && (
+            <button
+              type="button"
+              onClick={onOpenReminderModal}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-xl text-xs font-semibold text-amber-400 transition-colors cursor-pointer shrink-0"
+            >
+              <Bell size={14} />
+              設定定時提醒
+            </button>
+          )}
         </div>
       </div>
 

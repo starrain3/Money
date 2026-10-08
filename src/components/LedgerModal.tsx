@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import type { Ledger, LedgerType, LedgerFeeConfig, FeeCalculationType } from '../types'
 import { LEDGER_COLORS, LEDGER_ICONS } from '../constants/categories'
 import { DynamicIcon } from './DynamicIcon'
+import { useNotification } from '../context/NotificationContext'
 import { X, Trash2, Percent, Coins, Sparkles } from 'lucide-react'
 
 interface LedgerModalProps {
@@ -21,6 +22,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({
   editLedger,
   totalLedgersCount,
 }) => {
+  const { showToast, showConfirm } = useNotification()
   const [name, setName] = useState('')
   const [type, setType] = useState<LedgerType>('standard')
   const [icon, setIcon] = useState('Wallet')
@@ -111,7 +113,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) {
-      alert('請輸入帳本名稱！')
+      showToast('請輸入帳本名稱！', 'warning')
       return
     }
 
@@ -544,14 +546,20 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({
             {editLedger && onDelete && (
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const confirmMsg =
                     totalLedgersCount <= 1
                       ? `「${editLedger.name}」是您目前唯一的帳本。刪除後將清除所有記錄，並自動為您建立一個全新的空白「日常開銷」帳本，確定要刪除嗎？`
                       : `確定要刪除「${editLedger.name}」帳本及其所有帳目記錄嗎？此動作無法復原。`
-                  if (confirm(confirmMsg)) {
+                  const confirmed = await showConfirm(confirmMsg, {
+                    title: '刪除帳本確認',
+                    type: 'danger',
+                    confirmText: '確定刪除',
+                  })
+                  if (confirmed) {
                     onDelete(editLedger.id)
                     onClose()
+                    showToast(`已刪除帳本「${editLedger.name}」`, 'info')
                   }
                 }}
                 className="px-4 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30 transition-colors flex items-center justify-center cursor-pointer"

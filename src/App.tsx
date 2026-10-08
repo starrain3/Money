@@ -12,7 +12,9 @@ import { LedgerModal } from './components/LedgerModal'
 import { InstallPrompt } from './components/InstallPrompt'
 import { VersionModal } from './components/VersionModal'
 import { UpdateNotificationBanner } from './components/UpdateNotificationBanner'
+import { ReminderModal } from './components/ReminderModal'
 import { useAppVersion } from './hooks/useAppVersion'
+import { useReminders } from './hooks/useReminders'
 
 export function App() {
   // 核心資料狀態
@@ -44,6 +46,18 @@ export function App() {
 
   const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false)
   const [editingLedger, setEditingLedger] = useState<Ledger | null>(null)
+
+  // 定時提醒管理
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false)
+  const {
+    reminders,
+    permission,
+    requestPermission,
+    toggleReminder,
+    deleteReminder,
+    saveOrUpdateReminder,
+    triggerTestNotification,
+  } = useReminders()
 
   // 當資料更動時，持久化到 localStorage
   useEffect(() => {
@@ -210,6 +224,8 @@ export function App() {
         currentVersion={currentVersion}
         hasUpdate={hasUpdate}
         onOpenVersionModal={() => setIsVersionModalOpen(true)}
+        onOpenReminderModal={() => setIsReminderModalOpen(true)}
+        hasActiveReminders={reminders.some((r) => r.enabled)}
       />
 
       {/* 核心內容視圖 */}
@@ -270,6 +286,7 @@ export function App() {
             isUpdatingVersion={isUpdating}
             onCheckUpdate={checkUpdate}
             onForceUpdate={forceUpdate}
+            onOpenReminderModal={() => setIsReminderModalOpen(true)}
           />
         )}
       </main>
@@ -334,6 +351,19 @@ export function App() {
         remoteVersion={remoteVersion}
         isUpdating={isUpdating}
         onForceUpdate={forceUpdate}
+      />
+
+      {/* 定時提醒設定彈窗 */}
+      <ReminderModal
+        isOpen={isReminderModalOpen}
+        onClose={() => setIsReminderModalOpen(false)}
+        reminders={reminders}
+        permission={permission}
+        onRequestPermission={requestPermission}
+        onToggleReminder={toggleReminder}
+        onDeleteReminder={deleteReminder}
+        onSaveReminder={saveOrUpdateReminder}
+        onTriggerTest={triggerTestNotification}
       />
     </div>
   )
