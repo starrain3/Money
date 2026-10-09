@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import type { Ledger, Transaction, ViewTab, StorageData } from './types'
 import { loadStorageData, saveStorageData } from './utils/storage'
+import { getTodayDateString } from './utils/format'
 import { Navbar } from './components/Navbar'
 import { BottomNav } from './components/BottomNav'
 import { OverviewView } from './components/OverviewView'
@@ -122,7 +123,7 @@ export function App() {
   // 打開新增交易彈窗
   const handleOpenNewTransaction = (specificDate?: string) => {
     setEditingTransaction(null)
-    setDefaultTxDate(specificDate || new Date().toISOString().split('T')[0])
+    setDefaultTxDate(specificDate || getTodayDateString())
     setIsTxModalOpen(true)
   }
 

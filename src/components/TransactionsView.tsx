@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import type { Ledger, Transaction } from '../types'
-import { formatMoney, formatDateTaiwan, formatFullDate } from '../utils/format'
+import { formatMoney, formatDateTaiwan, formatFullDate, getTodayDateString, getCurrentMonthString } from '../utils/format'
 import {
   loadLedgerPreferences,
   saveLedgerPreferences,
@@ -56,7 +56,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     saveLedgerPreferences(activeLedger.id, { transactionsViewMode: mode })
   }
   // 目前年月份字串 (YYYY-MM)
-  const currentMonthStr = useMemo(() => new Date().toISOString().substring(0, 7), [])
+  const currentMonthStr = useMemo(() => getCurrentMonthString(), [])
 
   // 取得此帳本內所有記錄
   const ledgerTxList = useMemo(() => {
@@ -77,7 +77,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
   // 明細列表預設依當前月份 (YYYY-MM) 進行過濾
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    return new Date().toISOString().substring(0, 7)
+    return getCurrentMonthString()
   })
 
   // 快速切換上一月 / 下一月
@@ -120,7 +120,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   }, [activeLedger.id, activeLedger.type])
 
   // 月曆專用狀態：目前瀏覽的年與月 (YYYY-MM)，以及點選的特定日期 (YYYY-MM-DD)
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const todayStr = useMemo(() => getTodayDateString(), [])
   const [calendarMonth, setCalendarMonth] = useState<string>(() => todayStr.substring(0, 7))
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
 

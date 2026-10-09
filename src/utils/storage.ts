@@ -1,4 +1,5 @@
 import type { Ledger, StorageData } from '../types'
+import { getTodayDateString } from './format'
 
 const STORAGE_KEY = 'harvest_money_pwa_data_v1'
 
@@ -105,7 +106,7 @@ export const exportDataAsJSON = (data: StorageData): void => {
   const blob = new Blob([jsonStr], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  const dateStr = new Date().toISOString().split('T')[0]
+  const dateStr = getTodayDateString()
   a.href = url
   a.download = `harvest_money_backup_${dateStr}.json`
   document.body.appendChild(a)

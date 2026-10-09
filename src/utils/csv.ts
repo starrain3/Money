@@ -1,9 +1,10 @@
 import * as XLSX from 'xlsx'
 import type { Ledger, Transaction, TransactionType } from '../types'
+import { getTodayDateString } from './format'
 
 // 標準化日期字串為 YYYY-MM-DD
 export const normalizeDate = (rawDate: string): string => {
-  if (!rawDate) return new Date().toISOString().split('T')[0]
+  if (!rawDate) return getTodayDateString()
   const clean = rawDate.replace(/\//g, '-').trim()
   const parts = clean.split('-')
 
@@ -139,7 +140,7 @@ export const exportLedgerToCSV = (ledger: Ledger, transactions: Transaction[]): 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  const dateStr = new Date().toISOString().split('T')[0]
+  const dateStr = getTodayDateString()
   a.href = url
   a.download = `${ledger.name}_帳目明細_${dateStr}.csv`
   document.body.appendChild(a)
@@ -197,7 +198,7 @@ export const exportAllLedgersToCSV = (ledgers: Ledger[], transactions: Transacti
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  const dateStr = new Date().toISOString().split('T')[0]
+  const dateStr = getTodayDateString()
   a.href = url
   a.download = `Ku_Money_全部明細備份_${dateStr}.csv`
   document.body.appendChild(a)

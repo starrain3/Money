@@ -14,6 +14,7 @@ import {
   resetLedgerAccounts,
 } from '../utils/accountStorage'
 import { calculateFee, formatFeeConfigSummary } from '../utils/fee'
+import { getTodayDateString, getCurrentTimeString } from '../utils/format'
 import { DynamicIcon } from './DynamicIcon'
 import { CategoryManagerModal } from './CategoryManagerModal'
 import { useNotification } from '../context/NotificationContext'
@@ -61,10 +62,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   )
   const [amount, setAmount] = useState<string>('')
   const [category, setCategory] = useState<string>('')
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0])
-  const [time, setTime] = useState<string>(
-    new Date().toTimeString().split(' ')[0].substring(0, 5)
-  )
+  const [date, setDate] = useState<string>(getTodayDateString())
+  const [time, setTime] = useState<string>(getCurrentTimeString())
   const [account, setAccount] = useState<string>(() =>
     loadLedgerLastAccount(activeLedger.id, activeLedger.type)
   )
@@ -173,8 +172,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         : 'expense'
       setType(defaultType)
       setAmount('')
-      setDate(defaultDate || new Date().toISOString().split('T')[0])
-      setTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
+      setDate(defaultDate || getTodayDateString())
+      setTime(getCurrentTimeString())
 
       // 自動記住此帳本在 localStorage 分開記錄的上次使用錢包
       const ledgerLastAcc = loadLedgerLastAccount(activeLedger.id, activeLedger.type)

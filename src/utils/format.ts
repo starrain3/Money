@@ -20,3 +20,29 @@ export const formatFullDate = (dateStr: string): string => {
   return `${year}/${month}/${day}`
 }
 
+/**
+ * 取得指定 Date 或當前時間在台灣時區 (UTC+8) 的日期字串 (YYYY-MM-DD)
+ */
+export const getTodayDateString = (d: Date = new Date()): string => {
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' })
+}
+
+/**
+ * 取得指定 Date 或當前時間在台灣時區 (UTC+8) 的月份字串 (YYYY-MM)
+ */
+export const getCurrentMonthString = (d: Date = new Date()): string => {
+  return getTodayDateString(d).substring(0, 7)
+}
+
+/**
+ * 取得指定 Date 或當前時間在台灣時區 (UTC+8) 的時間字串 (HH:mm)
+ */
+export const getCurrentTimeString = (d: Date = new Date()): string => {
+  return new Intl.DateTimeFormat('zh-TW', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Taipei',
+  }).format(d)
+}
+
