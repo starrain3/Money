@@ -2,7 +2,6 @@ import React from 'react'
 import {
   X,
   RefreshCw,
-  Sparkles,
   CheckCircle2,
   Info,
   Clock,
@@ -46,10 +45,12 @@ export const VersionModal: React.FC<VersionModalProps> = ({
       <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl p-5 space-y-4">
         {/* 標題列 */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Sparkles size={18} />
-            </div>
+          <div className="flex items-center gap-3">
+            <img
+              src="pwa-192x192.png"
+              alt="Ku Money"
+              className="w-10 h-10 rounded-xl shadow-md border border-slate-700/80 object-cover shrink-0"
+            />
             <div>
               <h3 className="font-semibold text-slate-100 text-base">版本與更新管理</h3>
               <p className="text-xs text-slate-400">管理應用程式快取與取得最新版本</p>

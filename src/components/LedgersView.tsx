@@ -713,10 +713,16 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
 
       {/* PWA 離線與安裝指引 */}
       <div className="bg-gradient-to-br from-slate-900 to-emerald-950/40 border border-emerald-500/20 rounded-2xl p-5 shadow-lg space-y-3">
-        <h4 className="font-semibold text-white text-sm flex items-center gap-2">
-          <Sparkles size={16} className="text-emerald-400" />
-          PWA 手機桌面安裝指南
-        </h4>
+        <div className="flex items-center gap-2.5">
+          <img
+            src="pwa-192x192.png"
+            alt="Ku Money"
+            className="w-7 h-7 rounded-lg shadow-sm border border-emerald-500/30 object-cover shrink-0"
+          />
+          <h4 className="font-semibold text-white text-sm">
+            Ku Money 手機桌面安裝指南
+          </h4>
+        </div>
         <div className="text-xs text-slate-300 space-y-1.5 leading-relaxed">
           <p>
             • <strong>iPhone / iPad (Safari)</strong>：點選瀏覽器底部的「分享」按鈕 ➔ 滑動找到「加入主畫面 (Add to Home Screen)」，即可像原生 App 一樣全螢幕使用。

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Download, X, Share2, Smartphone } from 'lucide-react'
+import { Download, X } from 'lucide-react'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -73,9 +73,11 @@ export const InstallPrompt: React.FC = () => {
     <div className="fixed bottom-20 left-4 right-4 z-40 max-w-md mx-auto animate-in fade-in slide-in-from-bottom duration-300">
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950/90 border border-emerald-500/30 rounded-2xl p-4 shadow-2xl backdrop-blur-md flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 text-emerald-400">
-            {isIOS ? <Share2 className="w-6 h-6" /> : <Smartphone className="w-6 h-6" />}
-          </div>
+          <img
+            src="pwa-192x192.png"
+            alt="Ku Money"
+            className="w-11 h-11 rounded-xl shadow-md border border-emerald-500/30 object-cover shrink-0"
+          />
           <div>
             <h4 className="text-sm font-semibold text-white">安裝為手機 App (PWA)</h4>
             <p className="text-xs text-slate-300">

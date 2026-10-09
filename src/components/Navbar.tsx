@@ -95,8 +95,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* 下拉選單浮動面板 */}
           {dropdownOpen && (
             <div className="absolute top-full left-0 mt-2 w-64 bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-2xl backdrop-blur-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-              <div className="text-[11px] font-medium text-slate-400 px-2 py-1 mb-1">
-                選擇切換帳本
+              <div className="flex items-center gap-2 px-2 py-1.5 mb-1 border-b border-slate-800">
+                <img
+                  src="pwa-192x192.png"
+                  alt="Ku Money"
+                  className="w-5 h-5 rounded-md object-cover shadow-sm"
+                />
+                <span className="text-xs font-semibold text-slate-200">Ku Money</span>
+                <span className="text-[10px] text-slate-400 ml-auto">切換帳本</span>
               </div>
 
               <div className="space-y-1 max-h-60 overflow-y-auto">
