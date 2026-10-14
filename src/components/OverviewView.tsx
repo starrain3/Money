@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react'
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import type { Ledger, Transaction } from '../types'
 import { formatMoney, formatDateTaiwan } from '../utils/format'
 import {
@@ -7,6 +7,12 @@ import {
   getDefaultTimeRangeForLedger,
   type OverviewTimeRange,
 } from '../utils/ledgerPreferences'
+import {
+  getMondayOfWeek,
+  getOffsetWeekMonday,
+  getWeekInfo,
+  getWeeksInYear,
+} from '../utils/dateWeek'
 import { DynamicIcon } from './DynamicIcon'
 import {
   TrendingUp,
@@ -49,14 +55,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
+  const currentMondayStr = useMemo(() => getMondayOfWeek(), [])
 
-  // 依當前帳本獨立載入偏好 (全部 / 按月 / 按年，以及選取之年與月)
+  // 依當前帳本獨立載入偏好 (全部 / 按週 / 按月 / 按年，以及選取之週、年、月)
   const initialPrefs = useMemo(() => {
     return loadLedgerPreferences(activeLedger.id, activeLedger.type)
   }, [activeLedger.id, activeLedger.type])
 
   const [timeRange, setTimeRange] = useState<TimeRange>(() => {
     return initialPrefs.overviewTimeRange || getDefaultTimeRangeForLedger(activeLedger.type)
+  })
+  const [selectedWeekStart, setSelectedWeekStart] = useState<string>(() => {
+    return initialPrefs.overviewWeekStart || currentMondayStr
   })
   const [selectedYear, setSelectedYear] = useState<number>(() => {
     return initialPrefs.overviewYear || currentYear
@@ -65,10 +75,32 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     return initialPrefs.overviewMonth || currentMonth
   })
 
+  // 當前選取週的詳細資訊 (年份、週數、起訖日)
+  const currentWeekInfo = useMemo(() => {
+    return getWeekInfo(selectedWeekStart)
+  }, [selectedWeekStart])
+  const selectedWeekEnd = currentWeekInfo.endDate
+
+  // 週切換膠囊按鈕的 DOM 參照 (自動滾動聚焦至選中週)
+  const activeWeekBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (timeRange === 'week' && activeWeekBtnRef.current) {
+      activeWeekBtnRef.current.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest',
+      })
+    }
+  }, [timeRange, selectedWeekStart])
+
   // 當切換帳本 (activeLedger.id 改變) 時，同步自動載入該帳本專屬的偏好
   useEffect(() => {
     const prefs = loadLedgerPreferences(activeLedger.id, activeLedger.type)
     setTimeRange(prefs.overviewTimeRange || getDefaultTimeRangeForLedger(activeLedger.type))
+    if (prefs.overviewWeekStart) {
+      setSelectedWeekStart(prefs.overviewWeekStart)
+    }
     if (prefs.overviewYear) {
       setSelectedYear(prefs.overviewYear)
     }
@@ -81,6 +113,26 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const handleTimeRangeChange = (newRange: TimeRange) => {
     setTimeRange(newRange)
     saveLedgerPreferences(activeLedger.id, { overviewTimeRange: newRange })
+  }
+
+  // 切換週並儲存至當前帳本
+  const handleWeekChange = (weekStart: string) => {
+    setSelectedWeekStart(weekStart)
+    saveLedgerPreferences(activeLedger.id, { overviewWeekStart: weekStart })
+  }
+
+  const handlePrevWeek = () => {
+    const prev = getOffsetWeekMonday(selectedWeekStart, -1)
+    handleWeekChange(prev)
+  }
+
+  const handleNextWeek = () => {
+    const next = getOffsetWeekMonday(selectedWeekStart, 1)
+    handleWeekChange(next)
+  }
+
+  const handleResetToCurrentWeek = () => {
+    handleWeekChange(currentMondayStr)
   }
 
   // 切換年份並儲存至當前帳本
@@ -104,6 +156,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const availableYears = useMemo(() => {
     const yearsSet = new Set<number>()
     yearsSet.add(currentYear)
+    yearsSet.add(currentWeekInfo.year)
     ledgerTxList.forEach((t) => {
       if (t.date) {
         const y = parseInt(t.date.slice(0, 4), 10)
@@ -111,7 +164,23 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       }
     })
     return Array.from(yearsSet).sort((a, b) => b - a)
-  }, [ledgerTxList, currentYear])
+  }, [ledgerTxList, currentYear, currentWeekInfo.year])
+
+  // 計算選定年份中各週是否有記帳紀錄
+  const weeksWithData = useMemo(() => {
+    const set = new Set<string>()
+    ledgerTxList.forEach((t) => {
+      if (t.date) {
+        set.add(getMondayOfWeek(t.date))
+      }
+    })
+    return set
+  }, [ledgerTxList])
+
+  // 當前週所屬年份的完整週列表
+  const yearWeeks = useMemo(() => {
+    return getWeeksInYear(currentWeekInfo.year)
+  }, [currentWeekInfo.year])
 
   // 計算選定年份中各月份是否有記帳紀錄
   const monthsWithData = useMemo(() => {
@@ -132,10 +201,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   // 判斷某筆交易日期是否符合目前選擇的時間範圍
   const isDateInFilter = useCallback((dateStr: string) => {
     if (timeRange === 'all') return true
+    if (timeRange === 'week') return dateStr >= selectedWeekStart && dateStr <= selectedWeekEnd
     if (timeRange === 'month') return dateStr.startsWith(selectedMonthPrefix)
     if (timeRange === 'year') return dateStr.startsWith(selectedYearPrefix)
     return true
-  }, [timeRange, selectedMonthPrefix, selectedYearPrefix])
+  }, [timeRange, selectedWeekStart, selectedWeekEnd, selectedMonthPrefix, selectedYearPrefix])
 
   // 依時間範圍篩選後的交易清單
   const filteredTxList = useMemo(() => {
@@ -600,9 +670,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   const timeRangeLabel = useMemo(() => {
     if (timeRange === 'all') return '全部累計'
+    if (timeRange === 'week') return `${currentWeekInfo.year} 年 第 ${currentWeekInfo.weekNumber} 週 (${currentWeekInfo.rangeLabel})`
     if (timeRange === 'month') return `${selectedYear} 年 ${selectedMonth} 月`
     return `${selectedYear} 年度`
-  }, [timeRange, selectedYear, selectedMonth])
+  }, [timeRange, currentWeekInfo, selectedYear, selectedMonth])
 
   // 當前篩選範圍下的所有交易排序清單
   const displayedTransactions = useMemo(() => {
@@ -668,6 +739,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 全部
               </button>
               <button
+                onClick={() => handleTimeRangeChange('week')}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                  timeRange === 'week'
+                    ? 'bg-white/20 text-white shadow-sm'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                按週
+              </button>
+              <button
                 onClick={() => handleTimeRangeChange('month')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                   timeRange === 'month'
@@ -698,6 +779,107 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </button>
           </div>
         </div>
+
+        {/* 週模式：導航控制器與整年週次分頁膠囊列 */}
+        {timeRange === 'week' && (
+          <div className="mb-4 bg-black/25 backdrop-blur-md border border-white/10 rounded-2xl p-2.5 sm:p-3 relative z-10 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={handlePrevWeek}
+                className="p-1.5 rounded-xl hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                title="上一週"
+              >
+                <ChevronLeft size={16} />
+                <span className="hidden sm:inline">上一週</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <Calendar size={15} className="text-emerald-400" />
+                <select
+                  value={currentWeekInfo.year}
+                  onChange={(e) => {
+                    const y = Number(e.target.value)
+                    const weeksInTargetYear = getWeeksInYear(y)
+                    const targetWeek =
+                      weeksInTargetYear.find((w) => w.weekNumber === currentWeekInfo.weekNumber) ||
+                      weeksInTargetYear[0]
+                    if (targetWeek) handleWeekChange(targetWeek.mondayStr)
+                  }}
+                  className="bg-white/10 text-white font-bold text-xs sm:text-sm rounded-lg px-2 py-0.5 border border-white/10 focus:outline-none cursor-pointer"
+                >
+                  {availableYears.map((yr) => (
+                    <option key={yr} value={yr} className="bg-slate-900 text-white">
+                      {yr} 年
+                    </option>
+                  ))}
+                </select>
+
+                <span className="font-bold text-white text-xs sm:text-sm tracking-wide">
+                  第 {currentWeekInfo.weekNumber} 週
+                </span>
+
+                <span className="text-[11px] text-white/70 hidden sm:inline">
+                  ({currentWeekInfo.fullRangeDetail})
+                </span>
+
+                {currentWeekInfo.isCurrentWeek ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    本週
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleResetToCurrentWeek}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 hover:text-white border border-white/15 transition-colors cursor-pointer"
+                  >
+                    回到本週
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={handleNextWeek}
+                className="p-1.5 rounded-xl hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                title="下一週"
+              >
+                <span className="hidden sm:inline">下一週</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
+            {/* 行動端小螢幕顯示日期區間 */}
+            <div className="text-center text-xs text-white/70 sm:hidden">
+              {currentWeekInfo.fullRangeDetail}
+            </div>
+
+            {/* 各週橫向分頁膠囊列 */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-1 border-t border-white/5">
+              {yearWeeks.map((w) => {
+                const isSelected = w.mondayStr === selectedWeekStart
+                const hasData = weeksWithData.has(w.mondayStr)
+                return (
+                  <button
+                    key={w.mondayStr}
+                    ref={isSelected ? activeWeekBtnRef : null}
+                    onClick={() => handleWeekChange(w.mondayStr)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium shrink-0 transition-all cursor-pointer relative text-center ${
+                      isSelected
+                        ? 'bg-white text-slate-900 font-bold shadow-md'
+                        : 'text-white/70 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <div>第{w.weekNumber}週</div>
+                    <div className={`text-[10px] ${isSelected ? 'text-slate-600' : 'text-white/50'}`}>
+                      {w.rangeLabel}
+                    </div>
+                    {hasData && !isSelected && (
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* 月份模式：導航控制器與 1~12 月分頁列 */}
         {timeRange === 'month' && (
@@ -1200,7 +1382,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
             <FileText size={16} className="text-emerald-400" />
-            {timeRange === 'month'
+            {timeRange === 'week'
+              ? `${currentWeekInfo.year} 年 第 ${currentWeekInfo.weekNumber} 週 (${currentWeekInfo.rangeLabel}) 記帳明細`
+              : timeRange === 'month'
               ? `${selectedYear} 年 ${selectedMonth} 月 記帳明細`
               : timeRange === 'year'
               ? `${selectedYear} 年度 記帳明細`
@@ -1221,7 +1405,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         {recentTransactions.length === 0 ? (
           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-8 text-center">
             <p className="text-sm text-slate-400 mb-3">
-              {timeRange === 'month'
+              {timeRange === 'week'
+                ? `${currentWeekInfo.year} 年 第 ${currentWeekInfo.weekNumber} 週 (${currentWeekInfo.rangeLabel}) 尚無記帳紀錄`
+                : timeRange === 'month'
                 ? `${selectedYear} 年 ${selectedMonth} 月 尚無記帳紀錄`
                 : timeRange === 'year'
                 ? `${selectedYear} 年度 尚無記帳紀錄`

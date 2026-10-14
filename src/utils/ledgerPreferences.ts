@@ -1,6 +1,6 @@
 import type { LedgerType } from '../types'
 
-export type OverviewTimeRange = 'all' | 'month' | 'year'
+export type OverviewTimeRange = 'all' | 'month' | 'year' | 'week'
 export type TransactionsViewMode = 'calendar' | 'list'
 
 export interface LedgerPreferences {
@@ -8,6 +8,7 @@ export interface LedgerPreferences {
   overviewTimeRange?: OverviewTimeRange
   overviewYear?: number
   overviewMonth?: number
+  overviewWeekStart?: string
   // 明細偏好
   transactionsViewMode?: TransactionsViewMode
   transactionsTypeFilter?: string
