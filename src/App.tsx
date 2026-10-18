@@ -209,6 +209,14 @@ export function App() {
     setData(restoredData)
   }
 
+  // 自訂帳本重新排序
+  const handleReorderLedgers = (newLedgers: Ledger[]) => {
+    setData((prev) => ({
+      ...prev,
+      ledgers: newLedgers,
+    }))
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
       {/* 頂部導航與帳本切換 */}
@@ -276,6 +284,7 @@ export function App() {
             }}
             onDeleteLedger={handleDeleteLedger}
             onRestoreData={handleRestoreData}
+            onReorderLedgers={handleReorderLedgers}
             hideBalances={hideBalances}
             currentVersion={currentVersion}
             buildTime={buildTime}

@@ -33,9 +33,11 @@ import {
   SlidersHorizontal,
   Bell,
   BellRing,
+  ArrowUpDown,
 } from 'lucide-react'
 import { MergeLedgersModal } from './MergeLedgersModal'
 import { CategoryManagerModal } from './CategoryManagerModal'
+import { LedgerOrderModal } from './LedgerOrderModal'
 import { useNotification } from '../context/NotificationContext'
 
 interface LedgersViewProps {
@@ -47,6 +49,7 @@ interface LedgersViewProps {
   onOpenEditLedgerModal: (ledger: Ledger) => void
   onDeleteLedger: (id: string) => void
   onRestoreData: (data: StorageData) => void
+  onReorderLedgers?: (newLedgers: Ledger[]) => void
   hideBalances: boolean
   currentVersion?: string
   buildTime?: string
@@ -70,6 +73,7 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
   onOpenEditLedgerModal,
   onDeleteLedger,
   onRestoreData,
+  onReorderLedgers,
   hideBalances,
   currentVersion,
   buildTime,
@@ -87,7 +91,22 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
   const jsonFileInputRef = useRef<HTMLInputElement>(null)
   const csvFileInputRef = useRef<HTMLInputElement>(null)
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false)
+
+  // 排序更動常式
+  const handleReorder = (newLedgers: Ledger[]) => {
+    if (onReorderLedgers) {
+      onReorderLedgers(newLedgers)
+    } else {
+      onRestoreData({
+        version: 1,
+        ledgers: newLedgers,
+        transactions,
+        activeLedgerId,
+      })
+    }
+  }
 
   // 取得當前作用中的帳本
   const activeLedger = ledgers.find((l) => l.id === activeLedgerId) || ledgers[0]
@@ -292,14 +311,26 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
           </div>
           <div className="flex items-center gap-2">
             {ledgers.length >= 2 && (
-              <button
-                onClick={() => setIsMergeModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 font-medium text-xs border border-teal-500/30 transition-all cursor-pointer shadow-sm"
-                title="將兩個帳本的明細合併"
-              >
-                <Merge size={13} />
-                合併帳本
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsOrderModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 font-medium text-xs border border-emerald-500/30 transition-all cursor-pointer shadow-sm"
+                  title="調整帳本先後順序"
+                >
+                  <ArrowUpDown size={13} />
+                  自訂排序
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsMergeModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 font-medium text-xs border border-teal-500/30 transition-all cursor-pointer shadow-sm"
+                  title="將兩個帳本的明細合併"
+                >
+                  <Merge size={13} />
+                  合併帳本
+                </button>
+              </>
             )}
             <button
               onClick={onOpenNewLedgerModal}
@@ -749,6 +780,14 @@ export const LedgersView: React.FC<LedgersViewProps> = ({
       <CategoryManagerModal
         isOpen={isCategoryManagerOpen}
         onClose={() => setIsCategoryManagerOpen(false)}
+      />
+
+      {/* 自訂帳本排序彈窗 */}
+      <LedgerOrderModal
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        ledgers={ledgers}
+        onReorder={handleReorder}
       />
     </div>
   )
