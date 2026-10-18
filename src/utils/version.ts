@@ -5,6 +5,17 @@
 export const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'
 export const BUILD_TIME = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : '2026-10-08 01:00'
 
+// 若網址帶有 reload_ts 參數，在載入後自動清除，保持乾淨 URL 與正確的 PWA 作用域
+if (typeof window !== 'undefined' && window.location.search.includes('reload_ts')) {
+  try {
+    const cleanUrl = new URL(window.location.href)
+    cleanUrl.searchParams.delete('reload_ts')
+    window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash)
+  } catch {
+    // 忽略舊瀏覽器相容問題
+  }
+}
+
 export interface VersionInfo {
   version: string
   buildTime: string

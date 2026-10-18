@@ -59,10 +59,13 @@ export default defineConfig({
     versionPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'favicon-32x32.png', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'Ku Money - 多帳本與投資管理',
         short_name: 'Ku Money',
         description: 'Ku Money - 支援生活收支與股票投資的多帳本離線 PWA 記帳工具',
+        start_url: './',
+        scope: './',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
@@ -90,6 +93,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         globIgnores: ['**/version.json'],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
     }),
   ],
