@@ -769,9 +769,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           <div className="overflow-y-auto px-5 py-4 space-y-4 flex-1">
             {/* 收支類型標籤切換 */}
           <div>
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-800/80 rounded-xl">
-              {isStockLedger ? (
-                <>
+            {isStockLedger ? (
+              <div className="space-y-1.5 p-1 bg-slate-800/80 rounded-xl">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleTypeChange('stock_buy')}
@@ -805,78 +805,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   >
                     現金股息
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange('expense')}
-                    className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                      type === 'expense'
-                        ? 'bg-rose-600 text-white shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    其他費用
-                  </button>
-                </>
-              ) : isFuturesLedger ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange('stock_buy')}
-                    className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                      type === 'stock_buy'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    📈 買進建倉
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange('stock_sell')}
-                    className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                      type === 'stock_sell'
-                        ? 'bg-emerald-600 text-white shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    📉 賣出平倉
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange('income')}
-                    className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                      type === 'income'
-                        ? 'bg-amber-600 text-white shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    ⚡ 其他收入
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange('expense')}
-                    className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                      type === 'expense'
-                        ? 'bg-rose-600 text-white shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    ⚡ 其他費用
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange('expense')}
-                    className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                      type === 'expense'
-                        ? 'bg-rose-600 text-white shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    支出
-                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleTypeChange('income')}
@@ -886,11 +816,94 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    收入
+                    其他收入
                   </button>
-                </>
-              )}
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeChange('expense')}
+                    className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                      type === 'expense'
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    其他支出
+                  </button>
+                </div>
+              </div>
+            ) : isFuturesLedger ? (
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-800/80 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange('stock_buy')}
+                  className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                    type === 'stock_buy'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📈 買進建倉
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange('stock_sell')}
+                  className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                    type === 'stock_sell'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📉 賣出平倉
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange('income')}
+                  className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                    type === 'income'
+                      ? 'bg-amber-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  ⚡ 其他收入
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange('expense')}
+                  className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                    type === 'expense'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  ⚡ 其他支出
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-800/80 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange('expense')}
+                  className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                    type === 'expense'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  支出
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange('income')}
+                  className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                    type === 'income'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  收入
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 金額輸入 */}

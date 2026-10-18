@@ -1032,8 +1032,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             {isFutures
               ? '已實現平倉淨損益 (獲利 - 虧損)'
               : isStock
-              ? stockPortfolio.otherExpenseTotal > 0
-                ? '已實現總損益 (交易損益 + 股息 - 其他費用)'
+              ? stockPortfolio.otherExpenseTotal > 0 || stockPortfolio.otherIncomeTotal > 0
+                ? `已實現總損益 (交易損益 + 股息${stockPortfolio.otherIncomeTotal > 0 ? ' + 其他收入' : ''}${stockPortfolio.otherExpenseTotal > 0 ? ' - 其他支出' : ''})`
                 : '已實現總損益 (交易損益 + 現金股息)'
               : '收支結餘'}
           </div>
@@ -1123,15 +1123,15 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </>
           ) : isStock ? (
             <>
-              {/* 股票：已實現交易損益 (已扣除其他費用) */}
+              {/* 股票：已實現交易損益 (已扣除其他支出與計入其他收入) */}
               <div className="bg-slate-900/50 backdrop-blur-md border border-white/10 rounded-2xl p-3.5">
                 <div className="flex items-center justify-between text-xs mb-1 font-medium text-blue-400">
                   <span className="flex items-center gap-1.5">
                     <TrendingUp size={14} /> 已實現交易損益
                   </span>
-                  {stockPortfolio.otherExpenseTotal > 0 && (
-                    <span className="text-[10px] text-rose-300/80 bg-rose-500/10 px-1.5 py-0.2 rounded">
-                      含費用折抵
+                  {(stockPortfolio.otherExpenseTotal > 0 || stockPortfolio.otherIncomeTotal > 0) && (
+                    <span className="text-[10px] text-slate-300/80 bg-slate-500/10 px-1.5 py-0.2 rounded">
+                      含其他收支折抵
                     </span>
                   )}
                 </div>
@@ -1150,7 +1150,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 {stockPortfolio.otherExpenseTotal > 0 && (
                   <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between pt-1 border-t border-white/5">
                     <span>價差 {stockPortfolio.realizedTradingPnL > 0 ? '+' : ''}{maskValue(formatMoney(stockPortfolio.realizedTradingPnL, activeLedger.currency))}</span>
-                    <span className="text-rose-400/90">費用 -{maskValue(formatMoney(stockPortfolio.otherExpenseTotal, activeLedger.currency))}</span>
+                    <span className="text-rose-400/90">支出 -{maskValue(formatMoney(stockPortfolio.otherExpenseTotal, activeLedger.currency))}</span>
                   </div>
                 )}
               </div>
@@ -1167,11 +1167,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </div>
               </div>
 
-              {/* 股票：其他費用支出 */}
+              {/* 股票：其他支出 */}
               {stockPortfolio.otherExpenseTotal > 0 && (
                 <div className="bg-slate-900/50 backdrop-blur-md border border-rose-500/20 rounded-2xl p-3.5">
                   <div className="flex items-center gap-1.5 text-rose-400 text-xs mb-1 font-medium">
-                    <TrendingDown size={14} /> 其他費用支出
+                    <TrendingDown size={14} /> 其他支出
                   </div>
                   <div className="text-lg font-bold text-rose-400">
                     -{maskValue(
@@ -1181,11 +1181,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </div>
               )}
 
-              {/* 股票：其他投資收入 */}
+              {/* 股票：其他收入 */}
               {stockPortfolio.otherIncomeTotal > 0 && (
                 <div className="bg-slate-900/50 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-3.5">
                   <div className="flex items-center gap-1.5 text-emerald-400 text-xs mb-1 font-medium">
-                    <TrendingUp size={14} /> 其他投資收入
+                    <TrendingUp size={14} /> 其他收入
                   </div>
                   <div className="text-lg font-bold text-emerald-400">
                     +{maskValue(
