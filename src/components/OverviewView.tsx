@@ -27,6 +27,8 @@ import {
   Package,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Calendar,
 } from 'lucide-react'
 
@@ -40,6 +42,10 @@ interface OverviewViewProps {
 }
 
 type TimeRange = OverviewTimeRange
+
+const DEFAULT_VISIBLE_COUNT = 8
+const LARGE_LIST_THRESHOLD = 100
+const EXPAND_BATCH_SIZE = 50
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
   activeLedger,
@@ -684,10 +690,54 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     })
   }, [filteredTxList])
 
-  // 首頁卡片顯示前 8 筆交易
+  // 明細列表展開控制（預設顯示前 8 筆，超過 100 筆時支援分批載入防卡頓）
+  // 綁定篩選範圍 key：切換帳本或時間範圍時於當次 Render 同步重置回預設筆數，避免先掛載大量 DOM 再二次重繪收合
+  const filterScopeKey = `${activeLedger.id}:${timeRange}:${selectedWeekStart}:${selectedYear}:${selectedMonth}`
+  const [expandState, setExpandState] = useState<{ key: string; limit: number }>({
+    key: filterScopeKey,
+    limit: DEFAULT_VISIBLE_COUNT,
+  })
+  const txSectionRef = useRef<HTMLDivElement | null>(null)
+
+  const visibleLimit = expandState.key === filterScopeKey ? expandState.limit : DEFAULT_VISIBLE_COUNT
+  const totalFilteredCount = displayedTransactions.length
+
   const recentTransactions = useMemo(() => {
-    return displayedTransactions.slice(0, 8)
-  }, [displayedTransactions])
+    return displayedTransactions.slice(0, visibleLimit)
+  }, [displayedTransactions, visibleLimit])
+
+  const isExpanded = recentTransactions.length > DEFAULT_VISIBLE_COUNT
+  const hasMoreTransactions = totalFilteredCount > recentTransactions.length
+  const remainingCount = Math.max(0, totalFilteredCount - recentTransactions.length)
+
+  const handleExpandTransactions = () => {
+    if (totalFilteredCount <= LARGE_LIST_THRESHOLD) {
+      setExpandState({ key: filterScopeKey, limit: Number.MAX_SAFE_INTEGER })
+    } else {
+      setExpandState((prev) => {
+        const currentLimit = prev.key === filterScopeKey ? prev.limit : DEFAULT_VISIBLE_COUNT
+        const nextLimit = currentLimit + EXPAND_BATCH_SIZE
+        return {
+          key: filterScopeKey,
+          limit: nextLimit >= totalFilteredCount ? Number.MAX_SAFE_INTEGER : nextLimit,
+        }
+      })
+    }
+  }
+
+  const handleExpandAllTransactions = () => {
+    setExpandState({ key: filterScopeKey, limit: Number.MAX_SAFE_INTEGER })
+  }
+
+  const handleCollapseTransactions = () => {
+    setExpandState({ key: filterScopeKey, limit: DEFAULT_VISIBLE_COUNT })
+    if (txSectionRef.current) {
+      const rect = txSectionRef.current.getBoundingClientRect()
+      if (rect.top < 64) {
+        txSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }
+  }
 
   const maskValue = (val: string) => (hideBalances ? '••••••' : val)
 
@@ -1378,28 +1428,46 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       )}
 
       {/* 記帳明細清單 */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
+      <div ref={txSectionRef} className="space-y-3 scroll-mt-20">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <FileText size={16} className="text-emerald-400" />
-            {timeRange === 'week'
-              ? `${currentWeekInfo.year} 年 第 ${currentWeekInfo.weekNumber} 週 (${currentWeekInfo.rangeLabel}) 記帳明細`
-              : timeRange === 'month'
-              ? `${selectedYear} 年 ${selectedMonth} 月 記帳明細`
-              : timeRange === 'year'
-              ? `${selectedYear} 年度 記帳明細`
-              : '最近記帳明細'}
+            <FileText size={16} className="text-emerald-400 shrink-0" />
+            <span>
+              {timeRange === 'week'
+                ? `${currentWeekInfo.year} 年 第 ${currentWeekInfo.weekNumber} 週 (${currentWeekInfo.rangeLabel}) 記帳明細`
+                : timeRange === 'month'
+                ? `${selectedYear} 年 ${selectedMonth} 月 記帳明細`
+                : timeRange === 'year'
+                ? `${selectedYear} 年度 記帳明細`
+                : '最近記帳明細'}
+            </span>
             <span className="text-xs font-normal text-slate-400">
-              ({displayedTransactions.length} 筆)
+              {hasMoreTransactions
+                ? `(顯示 ${recentTransactions.length} / ${totalFilteredCount} 筆)`
+                : `(${totalFilteredCount} 筆)`}
             </span>
           </h3>
-          <button
-            onClick={onViewAllTransactions}
-            className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors cursor-pointer"
-          >
-            查看全部 ({ledgerTxList.length})
-            <ArrowRight size={13} />
-          </button>
+
+          <div className="flex items-center gap-3 ml-auto">
+            {isExpanded && (
+              <button
+                type="button"
+                onClick={handleCollapseTransactions}
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-0.5 font-medium transition-colors cursor-pointer"
+              >
+                收合
+                <ChevronUp size={13} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onViewAllTransactions}
+              className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors cursor-pointer"
+            >
+              前往明細頁 ({ledgerTxList.length})
+              <ArrowRight size={13} />
+            </button>
+          </div>
         </div>
 
         {recentTransactions.length === 0 ? (
@@ -1510,6 +1578,67 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </div>
               )
             })}
+
+            {/* 底部展開全部 / 分批載入 / 收合控制列 */}
+            {totalFilteredCount > DEFAULT_VISIBLE_COUNT && (
+              <div className="bg-slate-900/90 px-4 py-2.5 flex flex-wrap items-center justify-center gap-3">
+                {hasMoreTransactions ? (
+                  totalFilteredCount <= LARGE_LIST_THRESHOLD ? (
+                    <button
+                      type="button"
+                      onClick={handleExpandTransactions}
+                      className="w-full py-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <span>展開全部明細（剩餘 {remainingCount} 筆）</span>
+                      <ChevronDown size={15} />
+                    </button>
+                  ) : (
+                    <div className="w-full flex flex-wrap items-center justify-center gap-2 sm:gap-4 py-0.5">
+                      <button
+                        type="button"
+                        onClick={handleExpandTransactions}
+                        className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <span>
+                          載入更多（+{Math.min(EXPAND_BATCH_SIZE, remainingCount)} 筆 / 剩餘 {remainingCount} 筆）
+                        </span>
+                        <ChevronDown size={14} />
+                      </button>
+
+                      {remainingCount > EXPAND_BATCH_SIZE && (
+                        <button
+                          type="button"
+                          onClick={handleExpandAllTransactions}
+                          className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-4 transition-colors cursor-pointer"
+                        >
+                          一次展開全部 ({totalFilteredCount} 筆)
+                        </button>
+                      )}
+
+                      {isExpanded && (
+                        <button
+                          type="button"
+                          onClick={handleCollapseTransactions}
+                          className="text-xs text-slate-400 hover:text-white flex items-center gap-0.5 transition-colors cursor-pointer"
+                        >
+                          <span>收合明細</span>
+                          <ChevronUp size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleCollapseTransactions}
+                    className="w-full py-1 text-xs font-medium text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span>收合明細（僅顯示前 {DEFAULT_VISIBLE_COUNT} 筆）</span>
+                    <ChevronUp size={15} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
